@@ -137,27 +137,63 @@ def the_empty_partition (X : Type u) [DecidableEq X] : partition X ∅ := {
   disjoint := fun c hc => (Finset.not_mem_empty c hc).elim
 }
 
+lemma empty_powerset {X} [DecidableEq X]: (∅: Finset X).powerset = {∅} := by
+  ext fam
+  constructor
+  · intro h
+    exact h
+  · intro h
+    exact h
+
+lemma empty_singleton_powerset {X} [DecidableEq X]: ({∅}: (Finset (Finset X))).powerset = {∅, {∅}} := by
+  ext fam
+  constructor
+  · intro h
+    exact h
+  · intro h
+    exact h
+
+lemma empty_double_powerset {X} [DecidableEq X]: (∅: Finset X).powerset.powerset = {∅, {∅}} := by
+  rw [empty_powerset, empty_singleton_powerset]
 
 lemma card_empty_partition {X: Type u} [DecidableEq X] : Fintype.card (partition X ∅) = 1 :=
 by
   unfold Fintype.card Finset.univ partition.Fintype
-  simp only [Finset.filterMap]
   let ppe := (∅: Finset X).powerset.powerset
-  have powerset_of_singleton_empty: (∅: Finset X).powerset.powerset = {∅, {∅}} := by
+  have h : Finset.filter (fun fam => (partition.mk_if_valid ∅ fam).isSome) (∅: Finset X).powerset.powerset = {∅} := by
+    rw [empty_double_powerset]
     ext fam
+    simp only [Finset.mem_filter, Finset.mem_insert, Finset.mem_singleton, or_iff_left_iff_imp, iff_def]
     constructor
-    · intro h
-      exact h
-    · intro h
-      exact h
-
-  have h : Finset.filter (fun fam => (partition.mk_if_valid ∅ fam).isSome) (∅: Finset X).powerset.powerset = {{∅}} := by
-    rw [powerset_of_singleton_empty]
-    ext fam
-    simp
-    rw [or_iff_not_imp_left]
-    sorry
+    · intro h_conj
+      rcases h_conj with ⟨h_fam_cases, h_is_some⟩
+      cases h_fam_cases with
+      | inl h_fam_is_empty_family => exact h_fam_is_empty_family
+      | inr h_fam_contains_empty_set =>
+        have h_eval_invalid : (partition.mk_if_valid (∅ : Finset X) ({∅} : Finset (Finset X))).isSome = false := by
+          unfold partition.mk_if_valid
+          simp only [ne_eq, not_true, false_implies, Option.isSome_none]
+          simp
+        rw [h_fam_contains_empty_set] at h_is_some
+        rw [h_eval_invalid] at h_is_some
+        apply absurd h_is_some
+        -- TODO: figure out which tactics were used here
+        simp
+    ·
+      intro h_fam_empty
+      rw [h_fam_empty]
+      simp only [true_or, true_and]
+      unfold partition.mk_if_valid
+      simp only [Finset.not_mem_empty, implies_true, Finset.biUnion_empty, id_eq, true_and, forall_const, imp_self, Option.isSome_some]
+      -- TODO: figure out which tactics were used here
+      simp
+  unfold Fintype.elems
+  simp
+  rw [empty_double_powerset] at h
+  rw [empty_singleton_powerset]
+  rw [Finset.filterMap]
   sorry
+
 
 
 theorem bell_numbers_count_partitions
