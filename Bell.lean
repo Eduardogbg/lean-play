@@ -16,6 +16,24 @@ def bell_term: ℕ → ℕ → ℕ
 
 def bell (n : ℕ) : ℕ := bell_term n n
 
+lemma bell_term_diag_simpl (x : ℕ) :
+  bell_term (x+1) (x+1) = bell_term (x+1) x :=
+by
+  simp only [bell_term]
+  unfold bell_term
+  have h_choose_zero : Nat.choose x (x+1) = 0 := by
+    apply Nat.choose_eq_zero_of_lt
+    exact Nat.lt_succ_self x
+  rw [h_choose_zero, zero_mul]
+  dsimp
+  rw [zero_add]
+
+lemma bell_eq_bell_term_succ_prev (x : ℕ) :
+  bell (x+1) = bell_term (x+1) x :=
+by
+  rw [bell, bell_term_diag_simpl x]
+
+
 -- from data.setoid.partitions
 -- youtu.be/FEKsZj3WkTY
 @[ext] structure partition (X : Type u) [DecidableEq X] (S: Finset X) where
@@ -24,7 +42,7 @@ def bell (n : ℕ) : ℕ := bell_term n n
   covers: family.biUnion id = S
   disjoint: ∀ c ∈ family, ∀ d ∈ family, c ∩ d ≠ ∅ → c = d
 
-def partition.mk_if_valid {X: Type} [DecidableEq X] (S : Finset X) (family : Finset (Finset X)) : Option (partition X S) :=
+def partition.mk_if_valid {X: Type u} [DecidableEq X] (S: Finset X) (family: Finset (Finset X)) : Option (partition X S) :=
   if non_empty : (∀ c ∈ family, c ≠ ∅)
   then if covers : (family.biUnion id = S)
        then if disjoint : (∀ c ∈ family, ∀ d ∈ family, c ∩ d ≠ ∅ → c = d)
@@ -39,18 +57,21 @@ def partition.mk_if_valid {X: Type} [DecidableEq X] (S : Finset X) (family : Fin
   else none
 
 -- TODO: how to name this?
-lemma partition.mk_if_valid_id_family {X : Type}
+lemma partition.mk_if_valid_id_family
+  {X: Type u}
   [DecidableEq X]
-  (S : Finset X)
-  (fam : Finset (Finset X))
-  (part : partition X S)
-  (mk_is_some : partition.mk_if_valid S fam = some part) :
-  part.family = fam := by
+  (S: Finset X)
+  (fam: Finset (Finset X))
+  (part: partition X S)
+  (mk_is_some: partition.mk_if_valid S fam = some part):
+  part.family = fam :=
+  by
     unfold partition.mk_if_valid at mk_is_some
-    split_ifs at mk_is_some with h₁ h₂ h₃ <;> simp only [Option.some_inj] at mk_is_some
+    split_ifs at mk_is_some with h₁ h₂ h₃; simp only [Option.some_inj] at mk_is_some
     rw [← mk_is_some]
 
-instance partition.Fintype {X : Type} [DecidableEq X] (S: Finset X) : Fintype (partition X S) where
+-- not the shortest neatier proof but it's constructive and educational
+instance partition.Fintype {X : Type u} [DecidableEq X] (S: Finset X) : Fintype (partition X S) where
   elems := (S.powerset.powerset).filterMap (partition.mk_if_valid S) (
     by
       intros fam1 fam2 p p_in_fam1 p_in_fam2
@@ -91,52 +112,58 @@ instance partition.Fintype {X : Type} [DecidableEq X] (S: Finset X) : Fintype (p
       . exact covers part.covers
       . exact non_empty part.non_empty
 
-/-
-now we want to prove that amount of partitions of a finite set of
-cardinality n is equal to (bell n)
-
-steps:
-1. define a function or proposition which counts amounts of
-    partitions of a finite set of cardinality n
-2. use strong induction on n to prove the equivalence between
-   amount of partitions and bell numbers
-
-proof sketch:
-  1. ∅ has 1 partition (vacuous), singleton has 1 partition (trivial)
-  2. for n >= 1, we can consider a set of size n + 1, pick an element from it,
-     and consider the remaining n elements.
-  3. for each 0 <= k < n we can consider all possible subsets of
-     cardinality k from the remaining n elements, meaning we have n choose k
-     choices
-  4. for each of these (distinct) choices, we can add the chosen element to that set,
-     and get distinct partitions by adding that set (with the extra element) to every
-     partition of the remaining n - k elements
-  5. all the other possible partitions have the chosen element be in a singleton,
-     so we consider B_n more partitions, with the singleton added
-  6. so in total we have B_n + sum_{k=0}^{n-1} (n choose k) * B_{n - k} = B_{n+1} or,
-     alternatively: B_{n+1} = sum_{k=0}^{n} (n choose k) * B_k
--/
-
-
-
-/-
-
--/
--- def partitions_size (X: Type) [DecidableEq X] : ℕ := Finset.univ.card (partition X)
--- def partitions_size { X: Type u } [DecidableEq X]  (S: Finpartition X): ℕ :=
---   Fintype.card (partition S)
-
--- def partitions_count {α : Type u_1} [Lattice α] [OrderBot α] [Fintype α] (a: α) : ℕ :=
---   Fintype.card (Finpartition a)
-def count_partitions_of_finset (X : Type u) [DecidableEq X] (S : Finset X) : ℕ :=
+def finset_partition_count (X : Type u) [DecidableEq X] (S : Finset X): ℕ :=
   Fintype.card (partition X S)
 
-/- previous attempt (get someone to help me fix it later)
-  let r := Finset.range n
-  let f (k : ℕ) (h: k ∈ r): ℕ :=
-    have : k < n := by
-    rw [Finset.mem_range] at h
-    exact h
-  Nat.choose n k * bell k
-  r.sum f
--/
+lemma finset_partition_count_recurrence
+  {X : Type u} [DecidableEq X] [Inhabited X]
+  (n : ℕ)
+  (S : Finset X)
+  (s_card : S.card = n + 1) :
+  finset_partition_count X S =
+    (Finset.range (n + 1)).sum
+    (fun k => Nat.choose n k *
+      (finset_partition_count X
+        (Finset.empty.image (fun (_ : Finset.range (n - k)) => default) )
+      )
+    ) :=
+  by
+    sorry
+
+def the_empty_partition (X : Type u) [DecidableEq X] : partition X ∅ := {
+  family := ∅,
+  non_empty := fun c hc => (Finset.not_mem_empty c hc).elim
+  covers := Finset.biUnion_empty
+  disjoint := fun c hc => (Finset.not_mem_empty c hc).elim
+}
+
+
+lemma card_empty_partition {X: Type u} [DecidableEq X] : Fintype.card (partition X ∅) = 1 :=
+by
+  unfold Fintype.card Finset.univ partition.Fintype
+  simp only [Finset.filterMap]
+  let ppe := (∅: Finset X).powerset.powerset
+  have powerset_of_singleton_empty: (∅: Finset X).powerset.powerset = {∅, {∅}} := by
+    ext fam
+    constructor
+    · intro h
+      exact h
+    · intro h
+      exact h
+
+  have h : Finset.filter (fun fam => (partition.mk_if_valid ∅ fam).isSome) (∅: Finset X).powerset.powerset = {{∅}} := by
+    rw [powerset_of_singleton_empty]
+    ext fam
+    simp
+    rw [or_iff_not_imp_left]
+    sorry
+  sorry
+
+
+theorem bell_numbers_count_partitions
+  (X : Type u)
+  [DecidableEq X]
+  (S : Finset X):
+  finset_partition_count X S = bell S.card :=
+  by
+    sorry
