@@ -133,7 +133,7 @@ lemma singleton_empty_powerset {X} [DecidableEq X]: ({∅}: (Finset (Finset X)))
   · intro h
     exact h
 
-lemma partitions_of_empty  {X: Type} [DecidableEq X] :
+lemma partitions_of_empty {X: Type} [DecidableEq X] :
   Finset.filterMap
     (partition.mk_if_valid ∅)
     ({∅, {∅}}: (Finset (Finset (Finset X))))
@@ -224,21 +224,6 @@ by
   unfold the_empty_partition
   rw [Finset.card_singleton]
 
-lemma finset_partition_count_recurrence
-  {X : Type} [DecidableEq X] [Inhabited X]
-  (n : ℕ)
-  (S : Finset X)
-  (s_card : S.card = n + 1) :
-  finset_partition_count X S =
-    (Finset.range (n + 1)).sum
-    (fun k => Nat.choose n k *
-      (finset_partition_count X
-        (Finset.empty.image (fun (_ : Finset.range (n - k)) => default) )
-      )
-    ) :=
-  by
-    sorry
-
 structure ForwardResult
   (X: Type) [DecidableEq X]
   (S: Finset X)
@@ -248,10 +233,6 @@ structure ForwardResult
 where
   subset : { x // x ∈ S.powerset }
   part_rest : partition X (S \ ↑subset)
-  -- todo: this seems almost simplifiable,
-  -- maybe instead we want to assert that
-  -- part_insert.family \ part_rest = insert x ↑subset ?
-  block_in_family : insert x ↑subset ∈ part_insert.family
   family_eq : part_insert.family = insert (insert x ↑subset) part_rest.family
 
 -- readme: it's only called forward because of the direction
@@ -422,7 +403,6 @@ by
   exact {
     subset := ⟨s, s_in_S_powerset⟩,
     -- todo: simplify
-    block_in_family := by simp [family_eq, block, s]
     part_rest := rest_partition,
     family_eq := family_eq
   }
@@ -609,6 +589,14 @@ by
 
   rw [this1] at this2
 
+  have block_in_family :
+    insert x (forward.subset: Finset X) ∈ backward.part_insert.family :=
+  by
+    have family_eq : backward.part_insert.family = insert (insert x ↑forward.subset) forward.part_rest.family :=
+      forward.family_eq
+    rw [family_eq]
+    simp
+
   have block_eq : insert x (s : Finset X) = insert x (forward.subset : Finset X) :=
   by
     have s_block_in : insert x ↑s ∈ backward.part_insert.family :=
@@ -617,7 +605,7 @@ by
       exact Finset.mem_insert_self _ _
 
     have forward_block_in : insert x ↑forward.subset ∈ backward.part_insert.family :=
-      forward.block_in_family
+      block_in_family
 
     have x_in_s_block : x ∈ insert x (s : Finset X) := Finset.mem_insert_self _ _
     have x_in_forward_block : x ∈ insert x (forward.subset: Finset X) := Finset.mem_insert_self _ _
