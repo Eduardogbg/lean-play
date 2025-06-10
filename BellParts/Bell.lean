@@ -54,31 +54,108 @@ by
   rw [bell_eq_bell_term_succ_prev]
   simp only [le_refl, bell_term_recurrence]
 
+instance this_should_have_been_synth
+  (X: Type) [DecidableEq X]
+  (S: Finset X):
+  Fintype (Σ (s : S.powerset), partition X (S \ ↑s)) := by sorry
 
 theorem bell_numbers_count_partitions
-  (X : Type)
-  [DecidableEq X]
-  (S : Finset X):
-  finset_partition_count X S = bell S.card :=
+  (X : Type) [DecidableEq X] :
+  ∀ n : ℕ, ∀ S : Finset X, S.card = n → finset_partition_count X S = bell n :=
 by
-  induction S using Finset.induction_on with
-  | empty =>
-    rw [
-      finset_partition_count,
-      bell,
-      Finset.card_empty,
-      bell_term,
-      Fintype.card_eq_one_iff,
-    ]
-    use the_empty_partition X
-    intro y
-    exact partition.parts_of_empty_but_better y
-  | insert x S ih =>
-    rw [
-      Finset.card_insert_of_not_mem,
-      bell_eq_bell_term_succ_prev,
-      bell_term_recurrence
-    ]
-    unfold finset_partition_count
-    have h : (Finset.range (S.card + 1)).sum (fun k => Nat.choose S.card k * bell k) = bell (S.card + 1):= by
-      rw [bell_recurrence]
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro S hS
+    cases n with
+    | zero =>
+      have S_empty : S = ∅ := Finset.card_eq_zero.mp hS
+      rw [S_empty]
+      rw [finset_partition_count, bell, bell_term]
+      rw [Fintype.card_eq_one_iff]
+      use the_empty_partition X
+      intro y
+      exact partition.parts_of_empty_but_better y
+    | succ n =>
+      -- this depends on choice? maybe avoid choice if it does...
+      obtain ⟨x, hx⟩ := Finset.card_pos.mp (by rw [hS]; exact Nat.zero_lt_succ n)
+      let S' := S \ {x}
+      have hS' : S'.card = n :=
+      by
+        rw [Finset.card_sdiff]
+        · simp [hS]
+        · exact Finset.singleton_subset_iff.mpr hx
+      have S_eq : S = insert x S' :=
+      by
+        ext a
+        simp [S', Finset.mem_sdiff]
+        constructor
+        · intro ha
+          by_cases h : a = x
+          · exact Or.inl h
+          · exact Or.inr ⟨ha, h⟩
+        · intro h
+          cases h with
+          | inl h => rw [h]; exact hx
+          | inr h => exact h.1
+
+
+      -- Apply the bijection
+      rw [S_eq, finset_partition_count]
+      have bij := partition.insert_recurrence S' x (by simp [S'])
+      rw [Fintype.card_congr bij]
+
+      rw [Fintype.card_sigma]
+
+      -- Now use Bell recurrence
+      conv_rhs => rw [← hS, ← hS', bell_recurrence]
+      congr 1
+      ext k
+      simp only [Finset.sum_apply]
+
+      -- Count subsets of size k
+      have subset_count : (S'.powerset.filter (fun s => s.card = k)).card = Nat.choose n k := by
+        sorry -- Standard counting argument
+
+      -- For each subset s of size k, S' \ s has size n - k
+      have : ∀ s ∈ S'.powerset, s.card = k → (S' \ s).card = n - k := by
+        intro s hs hk
+        rw [Finset.card_sdiff (Finset.mem_powerset.mp hs), hS', hk]
+
+      -- Apply IH to each S' \ s
+      sorry -- Complete the calculation
+
+
+/-
+  maybe this version could be cleaner to prove than to depend on cardinality?
+  (it would need strong induction tho... Finset.induction_on'?)
+  but then it's probably better to use one that depends on cardinality, for
+  the purposes of equating that to bell numbers
+-/
+-- theorem bell_numbers_count_partitions
+--   (X : Type)
+--   [DecidableEq X]
+--   (S : Finset X):
+--   finset_partition_count X S = bell S.card :=
+-- by
+--   induction S using Finset.induction_on with
+--   | empty =>
+--     rw [
+--       finset_partition_count,
+--       bell,
+--       Finset.card_empty,
+--       bell_term,
+--       Fintype.card_eq_one_iff,
+--     ]
+--     use the_empty_partition X
+--     intro y
+--     exact partition.parts_of_empty_but_better y
+--   | insert x S x_not_in_S ih =>
+--     rw [
+--       Finset.card_insert_of_not_mem,
+--       bell_eq_bell_term_succ_prev,
+--       bell_term_recurrence
+--     ]
+--     unfold finset_partition_count
+--     have h : (Finset.range (S.card + 1)).sum (fun k => Nat.choose S.card k * bell k) = bell (S.card + 1):= by
+--       rw [bell_recurrence]

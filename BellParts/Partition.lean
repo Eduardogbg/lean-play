@@ -41,9 +41,9 @@ lemma partition.mk_if_valid_id_family
   (mk_is_some: partition.mk_if_valid S fam = some part):
   part.family = fam :=
 by
-    unfold partition.mk_if_valid at mk_is_some
-    split_ifs at mk_is_some with h₁ h₂ h₃; simp only [Option.some_inj] at mk_is_some
-    rw [← mk_is_some]
+  unfold partition.mk_if_valid at mk_is_some
+  split_ifs at mk_is_some with h₁ h₂ h₃; simp only [Option.some_inj] at mk_is_some
+  rw [← mk_is_some]
 
 
 lemma partition.mk_if_valid_inj_some {X: Type} [DecidableEq X] (S: Finset X) :
@@ -255,7 +255,12 @@ by
   rw [Finset.mem_biUnion] at x_in_union
 
   let blocks_with_x := part_insert.family.filter (fun b => x ∈ b)
-  have exactly_one_x_block : blocks_with_x.card = 1 := by
+  let block := blocks_with_x.biUnion id
+
+  -- TODO: these two next hypothesis should be combined into one
+  -- and simplified a lot
+  have exactly_one_x_block : blocks_with_x.card = 1 :=
+  by
     rw [Finset.card_eq_one]
     unfold blocks_with_x
     obtain ⟨block, block_in_family, x_in_block⟩ := x_in_union
@@ -281,18 +286,17 @@ by
       rw [Finset.mem_filter]
       exact ⟨block_in_family, x_in_block⟩
 
-  let block := blocks_with_x.biUnion id
   have ⟨block_in_family, x_in_block⟩:
     block ∈ part_insert.family ∧ x ∈ block :=
   by
     rw [Finset.card_eq_one] at exactly_one_x_block
-    obtain ⟨unique_block, h_eq⟩ := exactly_one_x_block
+    obtain ⟨unique_block, blocks_singleton⟩ := exactly_one_x_block
     have : block = unique_block :=
     by
       unfold block
-      simp [h_eq, Finset.biUnion_singleton, id]
+      simp [blocks_singleton, Finset.biUnion_singleton, id]
     rw [this]
-    have : unique_block ∈ blocks_with_x := by simp only [Finset.mem_singleton, h_eq]
+    have : unique_block ∈ blocks_with_x := by rw [blocks_singleton, Finset.mem_singleton]
     rw [Finset.mem_filter] at this
     exact this
 
@@ -300,7 +304,9 @@ by
   have s_subset : s ⊆ S := Finset.inter_subset_right
   have s_in_S_powerset: s ∈ S.powerset := Finset.mem_powerset.mpr s_subset
 
-  have part_insert_in_double_powerset : part_insert.family ∈ (insert x S).powerset.powerset :=
+  have part_insert_in_double_powerset :
+    part_insert.family ∈ (insert x S).powerset.powerset
+  :=
     partition.family_in_double_powerset (insert x S) part_insert
 
   let rest_family := part_insert.family \ {block}
@@ -313,6 +319,7 @@ by
       rw [Finset.mem_sdiff] at hc
       exact part_insert.non_empty c hc.1,
     -- todo: especially covers, abstract it
+    -- intuitively this should be easier too
     covers := by
       ext y
       rw [Finset.mem_biUnion, Finset.mem_sdiff]
@@ -380,11 +387,8 @@ by
       have y_in_union : y ∈ part_insert.family.biUnion id :=
         Finset.mem_biUnion.mpr ⟨block, block_in_family, y_in_block⟩
       rwa [part_insert.covers] at y_in_union
-    simp [s]
-    rw [
-      Finset.insert_inter_distrib,
-      Finset.insert_eq_of_mem
-    ]
+    simp only [s, block]
+    rw [Finset.insert_inter_distrib, Finset.insert_eq_of_mem]
     exact (Finset.inter_eq_left.mpr block_subset).symm
     exact x_in_block
 
@@ -392,17 +396,18 @@ by
   by
     rw [← block_eq]
     unfold rest_family
-    simp [
+    simp only [
       Finset.insert_eq,
       Finset.union_sdiff_self_eq_union,
-      Finset.union_eq_right,
-      Finset.singleton_subset_iff
+      Finset.right_eq_union,
+      Finset.singleton_subset_iff,
+      block,
+      s
     ]
     exact block_in_family
 
   exact {
     subset := ⟨s, s_in_S_powerset⟩,
-    -- todo: simplify
     part_rest := rest_partition,
     family_eq := family_eq
   }
@@ -522,52 +527,6 @@ by
     family_eq := family_eq
   }
 
-lemma block_eq_insert_x_inter {X : Type} [DecidableEq X]
-  (S : Finset X) (x : X) (block : Finset X)
-  (x_in_block : x ∈ block)
-  (block_subset : block ⊆ insert x S) :
-  block = insert x (block ∩ S) := by
-  ext y
-  constructor
-  · intro y_in_block
-    by_cases h : y = x
-    · rw [h]; exact Finset.mem_insert_self x _
-    · -- y ≠ x and y ∈ block ⊆ insert x S, so y ∈ S
-      have y_in_insert : y ∈ insert x S := block_subset y_in_block
-      rw [Finset.mem_insert] at y_in_insert
-      cases y_in_insert with
-      | inl y_eq_x => exact absurd y_eq_x h
-      | inr y_in_S =>
-        apply Finset.mem_insert_of_mem
-        rw [Finset.mem_inter]
-        exact ⟨y_in_block, y_in_S⟩
-  · intro y_in_rhs
-    rw [Finset.mem_insert] at y_in_rhs
-    cases y_in_rhs with
-    | inl y_eq_x => rw [y_eq_x]; exact x_in_block
-    | inr y_in_inter => exact (Finset.mem_inter.mp y_in_inter).left
-
-lemma insert_inter_eq {X : Type} [DecidableEq X]
-  (S s : Finset X) (x : X)
-  (x_not_in_S : x ∉ S)
-  (s_subset : s ⊆ S) :
-  (insert x s) ∩ S = s := by
-  ext y
-  constructor
-  · intro y_in_inter
-    obtain ⟨y_in_insert, y_in_S⟩ := Finset.mem_inter.mp y_in_inter
-    rw [Finset.mem_insert] at y_in_insert
-    cases y_in_insert with
-    | inl y_eq_x =>
-      rw [y_eq_x] at y_in_S
-      exact absurd y_in_S x_not_in_S
-    | inr y_in_s => exact y_in_s
-  · intro y_in_s
-    rw [Finset.mem_inter]
-    constructor
-    · exact Finset.mem_insert_of_mem y_in_s
-    · exact s_subset y_in_s
-
 lemma partition.forward_backward_subset_eq {X : Type} [DecidableEq X]
   (S : Finset X) (x : X) (x_not_in_S : x ∉ S)
   (s : { x // x ∈ S.powerset })
@@ -642,18 +601,21 @@ by
     simp at h
     rw [h]
 
+-- can't figure out how to get rid of this
+-- maybe I have to define equality of partitions to only depend on families?
+-- maybe instead of covers I could have a computed property `support` defined
+-- as the biUnion id of the family
 lemma partition.heq_of_family_eq {X : Type} [DecidableEq X]
-  {S1 S2 : Finset X} (h_eq : S1 = S2)
+  {S1 S2 : Finset X}
   (p1 : partition X S1) (p2 : partition X S2)
-  (h_fam : p1.family = p2.family) :
-  HEq p1 p2 := by
-  -- First substitute to make the types equal
-  subst h_eq
-  -- Now p1 and p2 have the same type, so we can use regular equality
+  (equal_families : p1.family = p2.family) :
+  HEq p1 p2 :=
+by
+  have equal_sets : S1 = S2 := by rw [← p1.covers, ← p2.covers, equal_families]
+  subst equal_sets
   apply heq_of_eq
-  -- Two partitions are equal if all their fields are equal
   ext
-  simp [h_fam]
+  simp only [equal_families]
 
 
 def partition.insert_recurrence
@@ -697,65 +659,65 @@ def partition.insert_recurrence
     let backward_result := insert_recurrence_backward S x x_not_in_S s part_rest
     let forward_result := insert_recurrence_forward S x x_not_in_S backward_result.part_insert
 
-    have subset_eq : forward_result.subset = s :=
+    have forward_subset_eq_s : forward_result.subset = s :=
       forward_backward_subset_eq S x x_not_in_S s part_rest
 
+    have x_in_block : x ∈ insert x (s: Finset X) := Finset.mem_insert_self x ↑s
+
+    have not_in_part_rest : insert x ↑s ∉ part_rest.family :=
+    by
+      intro h
+      -- TODO: dedup this proof from not_in_forward
+      have block_subset : insert x ↑s ⊆ S \ ↑s :=
+      by
+        have family_in_powerset := partition.family_in_double_powerset (S \ ↑s) part_rest
+        rw [Finset.mem_powerset] at family_in_powerset
+        have : insert x ↑s ∈ (S \ ↑s).powerset := family_in_powerset h
+        exact Finset.mem_powerset.mp this
+      have : x ∈ S \ ↑s := block_subset x_in_block
+      have : x ∈ S := (Finset.mem_sdiff.mp this).1
+      exact x_not_in_S this
+
+    have not_in_forward : insert x ↑s ∉ forward_result.part_rest.family :=
+    by
+      intro h
+      have block_subset : insert x ↑s ⊆ S \ ↑s :=
+      by
+        simp [← forward_subset_eq_s] at h ⊢
+        have := partition.family_in_double_powerset (S \ ↑forward_result.subset) forward_result.part_rest
+        exact Finset.mem_powerset.mp (Finset.mem_powerset.mp this h)
+      have : x ∈ S \ ↑s := block_subset x_in_block
+      have : x ∈ S := (Finset.mem_sdiff.mp (block_subset x_in_block)).1
+      exact x_not_in_S this
+
+    have part_rest_eq : forward_result.part_rest.family = part_rest.family :=
+    by
+      have forward_fam: backward_result.part_insert.family = (insert
+        (insert x ↑forward_result.subset)
+        forward_result.part_rest.family
+      ) := forward_result.family_eq
+
+      rw [backward_result.family_eq] at forward_fam
+      simp [forward_subset_eq_s] at forward_fam
+
+      ext a
+      have h := Finset.ext_iff.mp forward_fam a
+      simp only [Finset.mem_insert] at h
+      by_cases ha : a = insert x ↑s
+      ·
+        rw [ha]
+        simp [not_in_part_rest, not_in_forward]
+      ·
+        simp only [ha, or_false] at h
+        simp at h
+        exact h.symm
+
+    -- TODO: this can probably be removed by defining equality differently for
+    -- partitions
     rw [Sigma.mk.inj_iff]
     constructor
-    · exact subset_eq
-    .
-      have backward_fam : backward_result.part_insert.family = insert (insert x ↑s) part_rest.family :=
-        backward_result.family_eq
-
-      have forward_fam : backward_result.part_insert.family = insert (insert x ↑forward_result.subset) forward_result.part_rest.family :=
-        forward_result.family_eq
-
-      have not_in_part_rest : insert x ↑s ∉ part_rest.family :=
-      by
-        intro h
-        have block_subset : insert x ↑s ⊆ S \ ↑s :=
-        by
-          have family_in_powerset := partition.family_in_double_powerset (S \ ↑s) part_rest
-          rw [Finset.mem_powerset] at family_in_powerset
-          have : insert x ↑s ∈ (S \ ↑s).powerset := family_in_powerset h
-          exact Finset.mem_powerset.mp this
-        have x_in_block : x ∈ insert x (s: Finset X) := Finset.mem_insert_self x ↑s
-        have : x ∈ S \ ↑s := block_subset x_in_block
-        have : x ∈ S := (Finset.mem_sdiff.mp this).1
-        exact x_not_in_S this
-
-      have part_rest_eq : forward_result.part_rest.family = part_rest.family :=
-      by
-        rw [backward_fam] at forward_fam
-        simp [subset_eq] at forward_fam
-
-        have not_in_forward : insert x ↑s ∉ forward_result.part_rest.family :=
-        by
-          intro h
-          have block_subset : insert x ↑s ⊆ S \ ↑s := by
-            simp [← subset_eq] at h ⊢
-            have := partition.family_in_double_powerset (S \ ↑forward_result.subset) forward_result.part_rest
-            exact Finset.mem_powerset.mp (Finset.mem_powerset.mp this h)
-          have x_in_block : x ∈ insert x (s: Finset X) := Finset.mem_insert_self x ↑s
-          have : x ∈ S \ ↑s := block_subset x_in_block
-          have : x ∈ S := (Finset.mem_sdiff.mp this).1
-          exact x_not_in_S this
-
-        ext a
-        have h := Finset.ext_iff.mp forward_fam a
-        simp only [Finset.mem_insert] at h
-        by_cases ha : a = insert x ↑s
-        ·
-          rw [ha]
-          simp [not_in_part_rest, not_in_forward]
-        ·
-          simp only [ha, or_false] at h
-          simp at h
-          exact h.symm
-
-      have domain_eq : S \ ↑forward_result.subset = S \ ↑s := by rw [subset_eq]
-      exact partition.heq_of_family_eq
-        domain_eq
+    · exact forward_subset_eq_s
+    . exact partition.heq_of_family_eq
         forward_result.part_rest
         part_rest
         part_rest_eq
