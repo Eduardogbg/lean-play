@@ -4,7 +4,10 @@ import Mathlib.Data.Nat.Choose.Basic
 import Mathlib.Data.Finset.Basic
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
-
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Fintype.Basic
+import Mathlib.Data.Fintype.Card
+import Mathlib.Data.Fintype.Sigma
 
 def bell_term: ℕ → ℕ → ℕ
   | 0, _ => 1
@@ -46,7 +49,7 @@ by
       (bell_eq_bell_term_succ_prev k).symm
     rw [bell_to_term, ih k_lt_n]
     nth_rewrite 2 [Finset.sum_range_succ]
-    linarith
+    omega -- todo: benchmark omega vs linarith
 
 theorem bell_recurrence (n: ℕ) :
   bell (n + 1) = (Finset.range (n + 1)).sum (fun k => Nat.choose n k * bell k) :=
@@ -54,10 +57,23 @@ by
   rw [bell_eq_bell_term_succ_prev]
   simp only [le_refl, bell_term_recurrence]
 
-instance this_should_have_been_synth
+-- why couldn't lean synthetize this on its own?
+-- how do I finish the proof?
+-- instance this_should_have_been_synth
+--   (X: Type) [DecidableEq X]
+--   (S: Finset X):
+--   Fintype (Σ (s : S.powerset), partition X (S \ ↑s)) :=
+-- by
+--   sorry
+instance this_should_have_been_synth_2
   (X: Type) [DecidableEq X]
   (S: Finset X):
-  Fintype (Σ (s : S.powerset), partition X (S \ ↑s)) := by sorry
+  Fintype (Σ m : Fin (S.card + 1), Σ s : { x // x ∈ S.powerset ∧ x.card = m }, partition X (S \ ↑s)) := by sorry
+
+instance synth_wtf
+  (X: Type) [DecidableEq X]
+  (S: Finset X):
+  (i : Fin (S.card + 1)) → Fintype ((fun m ↦ (s : { x // x ∈ S.powerset ∧ x.card = ↑m }) × partition X (S \ ↑s)) i) := by sorry
 
 theorem bell_numbers_count_partitions
   (X : Type) [DecidableEq X] :
@@ -66,6 +82,7 @@ by
   intro n
   induction n using Nat.strong_induction_on with
   | _ n ih =>
+    unfold finset_partition_count at ih
     intro S hS
     cases n with
     | zero =>
@@ -99,63 +116,32 @@ by
           | inl h => rw [h]; exact hx
           | inr h => exact h.1
 
-
-      -- Apply the bijection
       rw [S_eq, finset_partition_count]
       have bij := partition.insert_recurrence S' x (by simp [S'])
       rw [Fintype.card_congr bij]
+      rw [Fintype.card_congr (sigma_powerset_by_card X S')]
 
-      rw [Fintype.card_sigma]
+      convert Fintype.card_sigma
+      .
+        -- todo: use ih to prove this here
+        have :
+          (k: Fin (S'.card + 1))
+            → Fintype.card
+            ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition X (S' \ ↑s))
+          = (Nat.choose n k * bell k) :=
+        by
+          -- todo: need crazy sigma shit but also that powerset
+          -- filtered by card is equal to (n choose k)
+          sorry
 
-      -- Now use Bell recurrence
-      conv_rhs => rw [← hS, ← hS', bell_recurrence]
-      congr 1
-      ext k
-      simp only [Finset.sum_apply]
+        -- gotta apply hS' in the sum index too
+        conv_rhs =>
+          arg 2
+          ext i
+          rw [this]
 
-      -- Count subsets of size k
-      have subset_count : (S'.powerset.filter (fun s => s.card = k)).card = Nat.choose n k := by
-        sorry -- Standard counting argument
-
-      -- For each subset s of size k, S' \ s has size n - k
-      have : ∀ s ∈ S'.powerset, s.card = k → (S' \ s).card = n - k := by
-        intro s hs hk
-        rw [Finset.card_sdiff (Finset.mem_powerset.mp hs), hS', hk]
-
-      -- Apply IH to each S' \ s
-      sorry -- Complete the calculation
-
-
-/-
-  maybe this version could be cleaner to prove than to depend on cardinality?
-  (it would need strong induction tho... Finset.induction_on'?)
-  but then it's probably better to use one that depends on cardinality, for
-  the purposes of equating that to bell numbers
--/
--- theorem bell_numbers_count_partitions
---   (X : Type)
---   [DecidableEq X]
---   (S : Finset X):
---   finset_partition_count X S = bell S.card :=
--- by
---   induction S using Finset.induction_on with
---   | empty =>
---     rw [
---       finset_partition_count,
---       bell,
---       Finset.card_empty,
---       bell_term,
---       Fintype.card_eq_one_iff,
---     ]
---     use the_empty_partition X
---     intro y
---     exact partition.parts_of_empty_but_better y
---   | insert x S x_not_in_S ih =>
---     rw [
---       Finset.card_insert_of_not_mem,
---       bell_eq_bell_term_succ_prev,
---       bell_term_recurrence
---     ]
---     unfold finset_partition_count
---     have h : (Finset.range (S.card + 1)).sum (fun k => Nat.choose S.card k * bell k) = bell (S.card + 1):= by
---       rw [bell_recurrence]
+        rw [bell_recurrence]
+        -- gotta prove that summing over Fin is the same as over
+        -- Finset.range
+        sorry
+      . sorry

@@ -7,7 +7,6 @@ import Mathlib.Data.Fintype.Basic
 import Mathlib.Data.Fintype.Card
 import Mathlib.Algebra.Algebra.Basic
 
-
 -- from data.setoid.partitions
 -- youtu.be/FEKsZj3WkTY
 @[ext] structure partition (X : Type) [DecidableEq X] (S: Finset X) where
@@ -721,4 +720,41 @@ def partition.insert_recurrence
         forward_result.part_rest
         part_rest
         part_rest_eq
+}
+
+-- I would have expected something like this to be decidable
+-- from existing theorems in mathlib, but I'm not sure
+-- but it's chill it's simple enough
+def sigma_powerset_by_card (X : Type) [DecidableEq X] (S: Finset X):
+  (Σ s : { x // x ∈ S.powerset }, partition X (S \ ↑s))
+  ≃
+  (Σ m : Fin (S.card + 1), Σ s : { x // x ∈ S.powerset ∧ x.card = m }, partition X (S \ ↑s))
+:= {
+  toFun :=
+  by
+    rintro ⟨s_hs, part_rest⟩
+    obtain ⟨s, s_in_powerset⟩ := s_hs
+    have : s.card ≤ S.card := (Finset.card_le_card (Finset.mem_powerset.mp s_in_powerset))
+    have : s.card < S.card + 1 := Nat.lt_add_one_of_le this
+    let m := Fin.mk s.card this
+
+    exact ⟨m, ⟨⟨s, ⟨s_in_powerset, by simp only [m]⟩⟩, part_rest⟩⟩
+
+  invFun := λ ⟨m, ⟨⟨s, s_in_powerset, s_card⟩, p⟩⟩ => ⟨⟨s, s_in_powerset⟩, p⟩,
+
+  left_inv := by intro; simp,
+
+  right_inv :=
+  by
+    intro ⟨m, ⟨⟨s, s_in_powerset, s_card⟩, p⟩⟩
+    simp only [Function.comp_apply]
+    have : s.card ≤ S.card := (Finset.card_le_card (Finset.mem_powerset.mp s_in_powerset))
+    have s_card_bound : s.card < S.card + 1 := Nat.lt_succ_of_le this
+    have : (⟨s.card, s_card_bound⟩ : Fin (S.card + 1)) = m := by ext; simp only; exact s_card
+    -- todo: can I reduce this?
+    congr 3
+    · rw [s_card]
+    · rw [s_card]
+    . rw [s_card]
+    . simp [this, s_card]
 }
