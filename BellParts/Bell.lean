@@ -19,6 +19,8 @@ def bell_term: ℕ → ℕ → ℕ
 
 def bell (n : ℕ) : ℕ := bell_term n n
 
+-- the following is a complete proof
+-- simp only [bell_term, Nat.choose_succ_self, zero_mul, zero_add]
 lemma bell_term_diag_simpl (x : ℕ) :
   bell_term (x+1) (x+1) = bell_term (x+1) x :=
 by
@@ -68,12 +70,12 @@ by
 instance this_should_have_been_synth_2
   (X: Type) [DecidableEq X]
   (S: Finset X):
-  Fintype (Σ m : Fin (S.card + 1), Σ s : { x // x ∈ S.powerset ∧ x.card = m }, partition X (S \ ↑s)) := by sorry
+  Fintype (Σ m : Fin (S.card + 1), Σ s : { x // x ∈ S.powerset ∧ x.card = m }, partition X (S \ ↑s)) := sorry
 
 instance synth_wtf
   (X: Type) [DecidableEq X]
   (S: Finset X):
-  (i : Fin (S.card + 1)) → Fintype ((fun m ↦ (s : { x // x ∈ S.powerset ∧ x.card = ↑m }) × partition X (S \ ↑s)) i) := by sorry
+  (i : Fin (S.card + 1)) → Fintype ((fun m ↦ (s : { x // x ∈ S.powerset ∧ x.card = ↑m }) × partition X (S \ ↑s)) i) := sorry
 
 theorem bell_numbers_count_partitions
   (X : Type) [DecidableEq X] :
@@ -83,10 +85,10 @@ by
   induction n using Nat.strong_induction_on with
   | _ n ih =>
     unfold finset_partition_count at ih
-    intro S hS
+    intro S S_card
     cases n with
     | zero =>
-      have S_empty : S = ∅ := Finset.card_eq_zero.mp hS
+      have S_empty : S = ∅ := Finset.card_eq_zero.mp S_card
       rw [S_empty]
       rw [finset_partition_count, bell, bell_term]
       rw [Fintype.card_eq_one_iff]
@@ -95,26 +97,22 @@ by
       exact partition.parts_of_empty_but_better y
     | succ n =>
       -- this depends on choice? maybe avoid choice if it does...
-      obtain ⟨x, hx⟩ := Finset.card_pos.mp (by rw [hS]; exact Nat.zero_lt_succ n)
+      obtain ⟨x, hx⟩ := Finset.card_pos.mp (by rw [S_card]; exact Nat.zero_lt_succ n)
+
       let S' := S \ {x}
-      have hS' : S'.card = n :=
+      have S'_card : S'.card = n :=
       by
         rw [Finset.card_sdiff]
-        · simp [hS]
+        · simp [S_card]
         · exact Finset.singleton_subset_iff.mpr hx
       have S_eq : S = insert x S' :=
       by
-        ext a
-        simp [S', Finset.mem_sdiff]
-        constructor
-        · intro ha
-          by_cases h : a = x
-          · exact Or.inl h
-          · exact Or.inr ⟨ha, h⟩
-        · intro h
-          cases h with
-          | inl h => rw [h]; exact hx
-          | inr h => exact h.1
+        unfold S'
+        rw [
+          Finset.insert_eq,
+          Finset.union_sdiff_of_subset (Finset.singleton_subset_iff.mpr hx)
+        ]
+
 
       rw [S_eq, finset_partition_count]
       have bij := partition.insert_recurrence S' x (by simp [S'])
@@ -130,8 +128,22 @@ by
             ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition X (S' \ ↑s))
           = (Nat.choose n k * bell k) :=
         by
-          -- todo: need crazy sigma shit but also that powerset
-          -- filtered by card is equal to (n choose k)
+          intro k
+          -- huuumm this is tricky as fuck actually, when I think about it
+          -- I know that (Fintype.card partition X set) depends only on set.card
+          -- and s is dependently typed and filtered to have constant card
+          -- buuuuuut
+          -- I can't just distribute Fintype.card through the sigma type
+          -- as I wouldn't have access to s on the right type
+          let goal_expr := Fintype.card ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition X (S' \ ↑s))
+          have synth??? : Fintype { x // x ∈ S'.powerset ∧ x.card = ↑k } := sorry
+          have :
+            goal_expr = Fintype.card (
+              (s: { x // x ∈ S'.powerset ∧ x.card = ↑k }) → (partition X (S' \ ↑s))
+            ) := sorry
+
+
+
           sorry
 
         -- gotta apply hS' in the sum index too
@@ -141,6 +153,7 @@ by
           rw [this]
 
         rw [bell_recurrence]
+        have : S'.card + 1 = n + 1 := by omega
         -- gotta prove that summing over Fin is the same as over
         -- Finset.range
         sorry
