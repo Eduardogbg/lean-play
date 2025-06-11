@@ -108,7 +108,9 @@ by
 
 -- not the shortest neatier proof but it's constructive and educational
 instance partition.Fintype (X : Type) [DecidableEq X] (S: Finset X) : Fintype (partition X S) where
-  elems := (S.powerset.powerset).filterMap (partition.mk_if_valid S) (partition.mk_if_valid_inj_some S)
+  elems := (S.powerset.powerset).filterMap
+    (partition.mk_if_valid S)
+    (partition.mk_if_valid_inj_some S)
   complete :=
   by
     intro part
@@ -234,6 +236,86 @@ where
   part_rest : partition X (S \ ↑subset)
   family_eq : part_insert.family = insert (insert x ↑subset) part_rest.family
 
+
+-- readme: I'm sure this along other results should probably already be
+-- present on mathlib and I could use them when I simplify to using
+-- Setoid.IsPartition or Finpartition
+-- todo: give a more mathy name to this (preimage filter whatever whatever)
+lemma partition.element_in_exactly_one_block
+  {X: Type} [DecidableEq X]
+  {S: Finset X}
+  {x: X}
+  (x_in_S: x ∈ S)
+  (part: partition X S):
+    { b ∈ part.family | x ∈ b }.card = 1
+  :=
+by
+  rw [Finset.card_eq_one]
+  have x_in_union: x ∈ part.family.biUnion id :=
+  by
+    rw [part.covers]
+    exact x_in_S
+  simp only [Finset.mem_biUnion, id] at x_in_union
+  obtain ⟨block, block_in_family, x_in_block⟩ := x_in_union
+  use block
+  ext b
+  rw [Finset.mem_singleton]
+  constructor
+  .
+    intros b_in_family_x_in_b
+    obtain ⟨b_in_family, x_in_b⟩ := Finset.mem_filter.mp b_in_family_x_in_b
+    have h : b ∩ block ≠ ∅ :=
+    by
+      rw [← Finset.nonempty_iff_ne_empty]
+      use x
+      rw [Finset.mem_inter]
+      exact ⟨x_in_b, x_in_block⟩
+    exact part.disjoint b b_in_family block block_in_family h
+  .
+    intro b_eq_block
+    subst b_eq_block
+    rw [Finset.mem_filter]
+    exact ⟨block_in_family, x_in_block⟩
+
+def partition.choose_eq_class
+  {X: Type} [DecidableEq X]
+  {S: Finset X}
+  (part: partition X S)
+  (x: X)
+  (x_in_S: x ∈ S):
+  { b // b ∈ part.family ∧ x ∈ b } :=
+by
+  -- todo: is there a let that just aliases? (so I don't have to unfold)
+  let blocks_with_x := part.family.filter (fun b => x ∈ b)
+  let block := blocks_with_x.biUnion id
+
+  have : blocks_with_x.card = 1 :=
+    partition.element_in_exactly_one_block x_in_S part
+  have : blocks_with_x = {block} :=
+  by
+    rw [Finset.card_eq_one] at this
+    obtain ⟨unique_block, blocks_singleton⟩ := this
+    have : block = unique_block := by
+      unfold block
+      rw [blocks_singleton, Finset.singleton_biUnion, id_eq]
+    rw [← this] at blocks_singleton
+    exact blocks_singleton
+  unfold blocks_with_x at this
+
+  have : block ∈ blocks_with_x :=
+  by
+    unfold blocks_with_x
+    simp [this]
+  unfold blocks_with_x at this
+
+  have block_satisfies_filter : block ∈ part.family ∧ x ∈ block :=
+  by
+    rw [Finset.mem_filter] at this
+    exact this
+
+  constructor
+  . exact block_satisfies_filter
+
 -- readme: it's only called forward because of the direction
 -- we defined the bijection but it definitely feels more backwards
 def partition.insert_recurrence_forward
@@ -246,68 +328,11 @@ def partition.insert_recurrence_forward
   :=
 by
   intro part_insert
-  have x_in_insert: x ∈ (insert x S) := Finset.mem_insert_self x S
-  have x_in_union : x ∈ part_insert.family.biUnion id :=
-  by
-    rw [part_insert.covers]
-    exact x_in_insert
-  rw [Finset.mem_biUnion] at x_in_union
 
-  let blocks_with_x := part_insert.family.filter (fun b => x ∈ b)
-  let block := blocks_with_x.biUnion id
-
-  -- TODO: these two next hypothesis should be combined into one
-  -- and simplified a lot
-  have exactly_one_x_block : blocks_with_x.card = 1 :=
-  by
-    rw [Finset.card_eq_one]
-    unfold blocks_with_x
-    obtain ⟨block, block_in_family, x_in_block⟩ := x_in_union
-    rw [id] at x_in_block
-    use block
-    ext b
-    constructor
-    .
-      intros b_in_family_x_in_b
-      obtain ⟨b_in_family, x_in_b⟩ := Finset.mem_filter.mp b_in_family_x_in_b
-      have h : b ∩ block ≠ ∅ :=
-      by
-        rw [← Finset.nonempty_iff_ne_empty]
-        use x
-        rw [Finset.mem_inter]
-        exact ⟨x_in_b, x_in_block⟩
-      rw [Finset.mem_singleton]
-      exact part_insert.disjoint b b_in_family block block_in_family h
-    .
-      rw [Finset.mem_singleton]
-      intro b_eq_block
-      subst b_eq_block
-      rw [Finset.mem_filter]
-      exact ⟨block_in_family, x_in_block⟩
-
-  have ⟨block_in_family, x_in_block⟩:
-    block ∈ part_insert.family ∧ x ∈ block :=
-  by
-    rw [Finset.card_eq_one] at exactly_one_x_block
-    obtain ⟨unique_block, blocks_singleton⟩ := exactly_one_x_block
-    have : block = unique_block :=
-    by
-      unfold block
-      simp [blocks_singleton, Finset.biUnion_singleton, id]
-    rw [this]
-    have : unique_block ∈ blocks_with_x := by rw [blocks_singleton, Finset.mem_singleton]
-    rw [Finset.mem_filter] at this
-    exact this
+  have ⟨block, ⟨block_in_family, x_in_block⟩⟩ :=
+    partition.choose_eq_class part_insert x (Finset.mem_insert_self x S)
 
   let s := block ∩ S
-  have s_subset : s ⊆ S := Finset.inter_subset_right
-  have s_in_S_powerset: s ∈ S.powerset := Finset.mem_powerset.mpr s_subset
-
-  have part_insert_in_double_powerset :
-    part_insert.family ∈ (insert x S).powerset.powerset
-  :=
-    partition.family_in_double_powerset (insert x S) part_insert
-
   let rest_family := part_insert.family \ {block}
 
   -- todo: abstract this somehow?
@@ -325,8 +350,7 @@ by
       simp only [id]
       constructor
       ·
-        intro h
-        obtain ⟨c, c_in_rest, y_in_c⟩ := h
+        rintro ⟨c, c_in_rest, y_in_c⟩
         obtain ⟨c_in_family, c_nin_singleton_block⟩ := Finset.mem_sdiff.mp c_in_rest
         have c_ne_block : c ≠ block := Finset.not_mem_singleton.mp c_nin_singleton_block
         constructor
@@ -386,7 +410,6 @@ by
       have y_in_union : y ∈ part_insert.family.biUnion id :=
         Finset.mem_biUnion.mpr ⟨block, block_in_family, y_in_block⟩
       rwa [part_insert.covers] at y_in_union
-    simp only [s, block]
     rw [Finset.insert_inter_distrib, Finset.insert_eq_of_mem]
     exact (Finset.inter_eq_left.mpr block_subset).symm
     exact x_in_block
@@ -400,13 +423,11 @@ by
       Finset.union_sdiff_self_eq_union,
       Finset.right_eq_union,
       Finset.singleton_subset_iff,
-      block,
-      s
     ]
     exact block_in_family
 
   exact {
-    subset := ⟨s, s_in_S_powerset⟩,
+    subset := ⟨s, Finset.mem_powerset.mpr Finset.inter_subset_right⟩,
     part_rest := rest_partition,
     family_eq := family_eq
   }
@@ -667,12 +688,15 @@ def partition.insert_recurrence
     by
       intro h
       -- TODO: dedup this proof from not_in_forward
+      -- actually I'm not sure if it's possible, it's proof by contradiction,
+      -- they are absurds, and though the proofs are a bit similar, not sure
+      -- if they can be abstracted
       have block_subset : insert x ↑s ⊆ S \ ↑s :=
       by
         have family_in_powerset := partition.family_in_double_powerset (S \ ↑s) part_rest
         rw [Finset.mem_powerset] at family_in_powerset
-        have : insert x ↑s ∈ (S \ ↑s).powerset := family_in_powerset h
-        exact Finset.mem_powerset.mp this
+        have block_in_powerset_rest := family_in_powerset h
+        exact Finset.mem_powerset.mp block_in_powerset_rest
       have : x ∈ S \ ↑s := block_subset x_in_block
       have : x ∈ S := (Finset.mem_sdiff.mp this).1
       exact x_not_in_S this
@@ -691,25 +715,22 @@ def partition.insert_recurrence
 
     have part_rest_eq : forward_result.part_rest.family = part_rest.family :=
     by
-      have forward_fam: backward_result.part_insert.family = (insert
-        (insert x ↑forward_result.subset)
-        forward_result.part_rest.family
-      ) := forward_result.family_eq
+      let forward_fam := forward_result.family_eq
 
       rw [backward_result.family_eq] at forward_fam
       simp [forward_subset_eq_s] at forward_fam
-
-      ext a
-      have h := Finset.ext_iff.mp forward_fam a
-      simp only [Finset.mem_insert] at h
-      by_cases ha : a = insert x ↑s
+      -- todo: should this be shorter somehow? looks like it could be
+      ext block
+      have fams_eq := Finset.ext_iff.mp forward_fam block
+      simp only [Finset.mem_insert] at fams_eq
+      by_cases h_block : block = insert x ↑s
       ·
-        rw [ha]
+        rw [h_block]
         simp [not_in_part_rest, not_in_forward]
       ·
-        simp only [ha, or_false] at h
-        simp at h
-        exact h.symm
+        simp only [h_block, or_false] at fams_eq
+        simp at fams_eq
+        exact fams_eq.symm
 
     -- TODO: this can probably be removed by defining equality differently for
     -- partitions
