@@ -151,8 +151,6 @@ lemma singleton_empty_powerset {X} [DecidableEq X]: ({∅}: (Finset (Finset X)))
   · intro h
     exact h
 
--- todo: _this_ should be easier, it's just about computing a function
--- over two small sets...
 lemma partitions_of_empty {X: Type} [DecidableEq X] :
   Finset.filterMap
     (partition.mk_if_valid ∅)
@@ -161,63 +159,36 @@ lemma partitions_of_empty {X: Type} [DecidableEq X] :
   =  {the_empty_partition X} :=
 by
   ext part
-  simp only [Finset.mem_filter, Finset.mem_insert, Finset.mem_singleton, or_iff_left_iff_imp, iff_def]
+  simp only [Finset.mem_filterMap, Finset.mem_singleton, iff_def]
   constructor
-  · intro fam_part_is_valid
-    have part_fam_empty : part.family = ∅ :=
-    by
-      unfold partition.mk_if_valid at fam_part_is_valid
-      rw [Finset.mem_filterMap] at fam_part_is_valid
-      rcases fam_part_is_valid with ⟨x, x_partition_is_valid⟩
-      rcases x_partition_is_valid with ⟨x_in_powerset, x_part_is_valid⟩
-      split_ifs at x_part_is_valid with non_empty covers disjoint
-      rw [Option.some_inj] at x_part_is_valid
-      simp only [Finset.mem_insert, Finset.mem_singleton] at x_in_powerset
-      have x_empty_set : x = ∅ := by
-        rcases x_in_powerset with (rfl | x_in_powerset)
-        . exact rfl
-        .
-          exfalso
-          apply absurd non_empty
-          simp only [ne_eq, Finset.forall_mem_not_eq', Decidable.not_not]
-          rw [x_in_powerset]
-          rw [Finset.mem_singleton]
-      obtain ⟨_, _⟩ := x_part_is_valid
-      simp only [x_empty_set]
-    ext a
-    constructor
-    . intros a_in_fam
-      rw [the_empty_partition]
-      simp only [Finset.not_mem_empty]
+  · intro h
+    rcases h with ⟨fam, fam_in_set, part_eq⟩
+    simp only [Finset.mem_insert, Finset.mem_singleton] at fam_in_set
+    rcases fam_in_set with (fam_eq | fam_eq_singleton)
+    ·
+      rw [fam_eq] at part_eq
+      unfold partition.mk_if_valid at part_eq
+      simp only [Finset.not_mem_empty, IsEmpty.forall_iff, implies_true, Finset.biUnion_empty, if_true] at part_eq
+      injection part_eq with p_eq
+      exact p_eq.symm
+    ·
+      rw [fam_eq_singleton] at part_eq
+      unfold partition.mk_if_valid at part_eq
+      -- kinda ugly to have to state this triviality
+      have h_fail : ¬(∀ c ∈ ({∅} : Finset (Finset X)), c ≠ ∅) :=
+        fun h => (h ∅ (Finset.mem_singleton_self ∅)) rfl
 
-      apply absurd a_in_fam
-      rw [part_fam_empty]
-      simp only [Finset.not_mem_empty, not_false_eq_true]
-    unfold the_empty_partition
-    simp only [Finset.not_mem_empty, IsEmpty.forall_iff]
-  .
-    -- TODO: this should be trivialer
-    intro part_empty
-    rcases part_empty with ⟨_, _⟩
-    unfold partition.mk_if_valid
-    rw [Finset.mem_filterMap]
+      simp only [h_fail, if_false] at part_eq
+      contradiction
+  ·
+    intro h
+    rw [h]
     use ∅
     constructor
-    . simp only [Finset.mem_insert, Finset.mem_singleton, true_or]
-    .
-      split_ifs with non_empty covers disjoint
-      rw [Option.some_inj]
-      unfold the_empty_partition
+    · simp only [Finset.mem_insert, Finset.mem_singleton, true_or]
+    · unfold partition.mk_if_valid
+      simp
       rfl
-      .
-        simp only [Finset.not_mem_empty, IsEmpty.forall_iff] at disjoint
-        rw [implies_true, not_true_eq_false] at disjoint
-        exact disjoint
-      . simp only [Finset.biUnion_empty, not_true_eq_false] at covers
-      .
-        simp only [Finset.not_mem_empty, ne_eq, IsEmpty.forall_iff] at non_empty
-        rw [implies_true, not_true_eq_false] at non_empty
-        exact non_empty
 
 lemma partition.parts_of_empty_but_better {X: Type} [DecidableEq X] (part: partition X ∅) :
   part = the_empty_partition X :=
