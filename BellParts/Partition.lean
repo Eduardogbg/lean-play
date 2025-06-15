@@ -17,21 +17,35 @@ import Mathlib.Algebra.Algebra.Basic
   -- disjoint: ∀ c ∈ family, ∀ d ∈ family, c ≠ d → Disjoint c d
   disjoint: ∀ c ∈ family, ∀ d ∈ family, c ∩ d ≠ ∅ → c = d
 
--- this was really fundamental but I only abstracted it recently,
--- need to find places to simplify using this... used a lot of ext
--- and intro etc
--- also find a better name for S and maybe family and block as well
-lemma partition.block_in_S
+lemma partition.blocks_with_common_element_equal
+  {X: Type} [DecidableEq X]
+  {S b1 b2: Finset X}
+  (part: partition X S)
+  (b1_in: b1 ∈ part.family)
+  (b2_in: b2 ∈ part.family)
+  {x: X}
+  (x_in_b1: x ∈ b1)
+  (x_in_b2: x ∈ b2) :
+  b1 = b2 :=
+by
+  have blocks_intersect : b1 ∩ b2 ≠ ∅ :=
+  by
+    rw [← Finset.nonempty_iff_ne_empty]
+    use x
+    rw [Finset.mem_inter]
+    exact ⟨x_in_b1, x_in_b2⟩
+  exact part.disjoint b1 b1_in b2 b2_in blocks_intersect
+
+lemma partition.block_subset_of_support
   {X: Type} [DecidableEq X]
   {S: Finset X}
   { block: Finset X }
   (part: partition X S)
-  (block_in_fam: block ∈ part.family):
+  (block_in: block ∈ part.family) :
   block ⊆ S :=
 by
   rw [← part.covers]
-  change id block ⊆ part.family.biUnion id
-  exact Finset.subset_biUnion_of_mem id block_in_fam
+  exact Finset.subset_biUnion_of_mem id block_in
 
 def partition.mk_if_valid {X: Type} [DecidableEq X] (S: Finset X) (family: Finset (Finset X)) : Option (partition X S) :=
   if non_empty : (∀ c ∈ family, c ≠ ∅)
@@ -230,28 +244,17 @@ lemma partition.element_in_exactly_one_block
   :=
 by
   rw [Finset.card_eq_one]
-  have x_in_union: x ∈ part.family.biUnion id :=
-  by
-    rw [part.covers]
-    exact x_in_S
+  have x_in_union: x ∈ part.family.biUnion id := by rw [part.covers]; exact x_in_S
   simp only [Finset.mem_biUnion, id] at x_in_union
   obtain ⟨block, block_in_family, x_in_block⟩ := x_in_union
   use block
   ext b
   rw [Finset.mem_singleton]
   constructor
-  .
-    intros b_in_family_x_in_b
-    obtain ⟨b_in_family, x_in_b⟩ := Finset.mem_filter.mp b_in_family_x_in_b
-    have h : b ∩ block ≠ ∅ :=
-    by
-      rw [← Finset.nonempty_iff_ne_empty]
-      use x
-      rw [Finset.mem_inter]
-      exact ⟨x_in_b, x_in_block⟩
-    exact part.disjoint b b_in_family block block_in_family h
-  .
-    intro b_eq_block
+  · intro h
+    obtain ⟨b_in_family, x_in_b⟩ := Finset.mem_filter.mp h
+    exact partition.blocks_with_common_element_equal part b_in_family block_in_family x_in_b x_in_block
+  · intro b_eq_block
     subst b_eq_block
     rw [Finset.mem_filter]
     exact ⟨block_in_family, x_in_block⟩
@@ -264,18 +267,19 @@ def partition.choose_eq_class
   (x_in_S: x ∈ S):
   { b // b ∈ part.family ∧ x ∈ b } :=
 by
-  -- todo: is there a let that just aliases? (so I don't have to unfold)
   let blocks_with_x := part.family.filter (fun b => x ∈ b)
   let block := blocks_with_x.biUnion id
 
   have one_block_with_x : blocks_with_x.card = 1 :=
     partition.element_in_exactly_one_block x_in_S part
 
+  -- could use element_in_exactly_one_block here?
   have : blocks_with_x = {block} :=
   by
     rw [Finset.card_eq_one] at one_block_with_x
     obtain ⟨unique_block, blocks_singleton⟩ := one_block_with_x
-    have : block = unique_block := by
+    have : block = unique_block :=
+    by
       unfold block
       rw [blocks_singleton, Finset.singleton_biUnion, id_eq]
     rw [← this] at blocks_singleton
@@ -510,16 +514,9 @@ by
           exact part_rest.disjoint c c_in_rest d d_in_rest hne
   }
 
-  have family_eq : part_insert.family = insert (insert x s) part_rest.family :=
-  by
-    simp only [part_insert]
-    unfold insert_family
-    unfold block
-    rfl
-
   exact {
     part_insert := part_insert,
-    family_eq := family_eq
+    family_eq := rfl
   }
 
 lemma partition.forward_backward_subset_eq
@@ -567,13 +564,8 @@ by
     have x_in_s_block : x ∈ insert x (s : Finset X) := Finset.mem_insert_self _ _
     have x_in_forward_block : x ∈ insert x (forward.subset: Finset X) := Finset.mem_insert_self _ _
 
-    exact backward.part_insert.disjoint _ s_block_in _ forward_block_in
-      (by
-        rw [← Finset.nonempty_iff_ne_empty];
-        use x;
-        rw [Finset.mem_inter]
-        exact ⟨x_in_s_block, x_in_forward_block⟩
-      )
+    exact partition.blocks_with_common_element_equal
+      backward.part_insert s_block_in forward_block_in x_in_s_block x_in_forward_block
   rw [block_eq] at this2
 
   have x_not_in_s : x ∉ (s: Finset X) := by
@@ -671,7 +663,7 @@ def partition.insert_recurrence
     have block_nin_part_rest : insert x ↑s ∉ part_rest.family :=
     by
       intro h
-      exact absurd (partition.block_in_S part_rest h) block_nin_rest
+      exact absurd (partition.block_subset_of_support part_rest h) block_nin_rest
 
     have block_nin_forward : insert x ↑s ∉ forward_result.part_rest.family :=
     by
@@ -679,7 +671,7 @@ def partition.insert_recurrence
       have block_in_rest : insert x ↑s ⊆ S \ ↑s :=
       by
         simp only [← forward_subset_eq_s] at h ⊢
-        exact partition.block_in_S forward_result.part_rest h
+        exact partition.block_subset_of_support forward_result.part_rest h
       exact absurd block_in_rest block_nin_rest
 
     have part_rest_eq : forward_result.part_rest.family = part_rest.family :=
@@ -711,6 +703,7 @@ def partition.insert_recurrence
 -- I would have expected something like this to be decidable
 -- from existing theorems in mathlib, but I'm not sure
 -- but it's chill it's simple enough
+-- TODO: use powersetCard instead
 def sigma_powerset_by_card {X : Type} [DecidableEq X] {S: Finset X}:
   (Σ s : { x // x ∈ S.powerset }, partition X (S \ ↑s))
   ≃
@@ -723,7 +716,6 @@ def sigma_powerset_by_card {X : Type} [DecidableEq X] {S: Finset X}:
     have : s.card ≤ S.card := (Finset.card_le_card (Finset.mem_powerset.mp s_in_powerset))
     have : s.card < S.card + 1 := Nat.lt_add_one_of_le this
     let m := Fin.mk s.card this
-
     exact ⟨m, ⟨⟨s, ⟨s_in_powerset, by simp only [m]⟩⟩, part_rest⟩⟩
 
   invFun := λ ⟨m, ⟨⟨s, s_in_powerset, s_card⟩, p⟩⟩ => ⟨⟨s, s_in_powerset⟩, p⟩,
@@ -743,4 +735,29 @@ def sigma_powerset_by_card {X : Type} [DecidableEq X] {S: Finset X}:
     · rw [s_card]
     . rw [s_card]
     . simp [this, s_card]
+}
+
+-- TODO: I think I now know how to not need this anymore
+def powersetCard_as_predicate
+  {X : Type} [DecidableEq X] {S: Finset X} (m: Fin (S.card + 1)):
+  { x // x ∈ S.powerset ∧ x.card = m } ≃ { x // x ∈ S.powersetCard m }
+:= {
+  toFun := by
+    intro x
+    conv =>
+      arg 1
+      ext x
+      rw [Finset.mem_powersetCard]
+      rw [← Finset.mem_powerset]
+    exact x
+  invFun := by
+    intro x
+    conv at x =>
+      arg 1
+      ext x
+      rw [Finset.mem_powersetCard]
+      rw [← Finset.mem_powerset]
+    exact x
+  left_inv := by intro; simp
+  right_inv := by intro; simp
 }

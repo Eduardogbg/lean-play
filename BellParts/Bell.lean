@@ -4,11 +4,86 @@ import Mathlib.Data.Nat.Choose.Basic
 import Mathlib.Data.Finset.Basic
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Basic
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Fintype.Sigma
+import Mathlib.Data.Finset.Powerset
 
+-- I tried everything to try to synth and it didn't work
+import Mathlib.Data.Fintype.Basic
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Fintype.Card
+import Mathlib.Data.Fintype.CardEmbedding
+import Mathlib.Data.Fintype.Defs
+import Mathlib.Data.Fintype.EquivFin
+import Mathlib.Data.Fintype.Fin
+import Mathlib.Data.Fintype.Inv
+import Mathlib.Data.Fintype.Lattice
+import Mathlib.Data.Fintype.List
+import Mathlib.Data.Fintype.OfMap
+import Mathlib.Data.Fintype.Option
+import Mathlib.Data.Fintype.Order
+import Mathlib.Data.Fintype.Parity
+import Mathlib.Data.Fintype.Perm
+import Mathlib.Data.Fintype.Pi
+import Mathlib.Data.Fintype.Pigeonhole
+import Mathlib.Data.Fintype.Powerset
+import Mathlib.Data.Fintype.Prod
+import Mathlib.Data.Fintype.Quotient
+import Mathlib.Data.Fintype.Sets
+import Mathlib.Data.Fintype.Shrink
+import Mathlib.Data.Fintype.Sigma
+import Mathlib.Data.Fintype.Sort
+import Mathlib.Data.Fintype.Sum
+import Mathlib.Data.Fintype.Units
+import Mathlib.Data.Fintype.Vector
+
+variable {α : Type*} [DecidableEq α] [Fintype α]
+variable (S' : Finset α) (k : ℕ)
+
+open scoped BigOperators
+
+-- now Lean happily finds the instance
+#check (inferInstance :
+  Fintype {x : Finset α // x ∈ S'.powerset ∧ x.card = k})
+
+/-
+  B_{n + 1} = ∑_{k = 0}^{n} (n choose k) B_k
+
+-/
+
+/-
+  ∑ 1/n! = e
+  ∑ n/n! = ∑ 1/(n-1)! = ∑ 1/n! = e
+  ∑ n2/n! = ∑ n/(n-1)! = ∑ (n + 1)/n! = ∑ n2 + 2n + 1 / n! = 2e
+  ∑ n3/n! = ∑ n3 + 3n2 + 3n + 1 / n! = 5e
+  ...
+
+  {{}, {1}, {2}, {1, 2}}
+
+  {({}, {1, 2}), ({1}, {2}), ({2}, {1}), ({1, 2}, {})}
+
+            2               1             1                 1
+  {({3}, {1, 2}), ({1, 3}, {2}), ({2, 3}, {1}), ({1, 2, 3}, {})}
+
+  {{1, 3}, {2}}
+  ->
+  ({1, 3}, {{2}})
+
+  {{3}, {1}, {2}}
+  ->
+  ({3}, {{1}, {2}})
+
+  {1, 2, 3, 4} -> {1, 2, 3}
+
+  {{3, 4}, {1}, {2}}
+  ->
+  ({3, 4}, {{1}, {2}})
+
+
+  (n choose k) * B_(n - k)
+
+  ∑ (n choose k) * B_(n - k) = ∑ (n choose n - k) * B_(n - k) = ∑ (n choose k) * B_(k)
+
+  {1, 2, 3}
+-/
 def bell_term: ℕ → ℕ → ℕ
   | 0, _ => 1
   | _, 0 => 1
@@ -96,10 +171,11 @@ by
       intro y
       exact partition.parts_of_empty_but_better y
     | succ n =>
-      -- this depends on choice? maybe avoid choice if it does...
       obtain ⟨x, hx⟩ := Finset.card_pos.mp (by rw [S_card]; exact Nat.zero_lt_succ n)
 
       let S' := S \ {x}
+      have x_nin_S' : x ∉ S' := by rw [Finset.mem_sdiff]; simp []
+
       have S'_card : S'.card = n :=
       by
         rw [Finset.card_sdiff]
@@ -113,48 +189,100 @@ by
           Finset.union_sdiff_of_subset (Finset.singleton_subset_iff.mpr hx)
         ]
 
-
       rw [S_eq, finset_partition_count]
-      have bij := partition.insert_recurrence S' x (by simp [S'])
+      have bij := partition.insert_recurrence x x_nin_S'
       rw [Fintype.card_congr bij]
-      rw [Fintype.card_congr (sigma_powerset_by_card X S')]
+      rw [Fintype.card_congr sigma_powerset_by_card]
 
       convert Fintype.card_sigma
       .
-        -- todo: use ih to prove this here
         have :
           (k: Fin (S'.card + 1))
             → Fintype.card
             ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition X (S' \ ↑s))
-          = (Nat.choose n k * bell k) :=
+          = (Nat.choose n k * bell (n - k)) :=
         by
           intro k
-          -- huuumm this is tricky as fuck actually, when I think about it
-          -- I know that (Fintype.card partition X set) depends only on set.card
-          -- and s is dependently typed and filtered to have constant card
-          -- buuuuuut
-          -- I can't just distribute Fintype.card through the sigma type
-          -- as I wouldn't have access to s on the right type
-          let goal_expr := Fintype.card ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition X (S' \ ↑s))
-          have synth??? : Fintype { x // x ∈ S'.powerset ∧ x.card = ↑k } := sorry
-          have :
-            goal_expr = Fintype.card (
-              (s: { x // x ∈ S'.powerset ∧ x.card = ↑k }) → (partition X (S' \ ↑s))
-            ) := sorry
-
-
-
-          sorry
-
-        -- gotta apply hS' in the sum index too
-        conv_rhs =>
-          arg 2
-          ext i
-          rw [this]
-
+          -- honestly I have no clue why this isn't happening automatically
+          -- TODO: either figure why it's not synthing or abstract it
+          have inst : Fintype { x_1 // x_1 ∈ S'.powerset ∧ x_1.card = ↑k } :=
+          by
+            apply Fintype.ofFinset (S'.powersetCard ↑k)
+            intro x
+            simp [Finset.mem_powersetCard, Finset.mem_powerset]
+            rfl
+          -- TODO: this is temporary until I figure out how to do it
+          -- without holes
+          rw [
+            show Fintype.card (
+              (s : { x // x ∈ S'.powerset ∧ x.card = ↑k })
+              × partition X (S' \ ↑s)
+            ) =  ∑
+              (s : { x // x ∈ S'.powerset ∧ x.card = ↑k }),
+              Fintype.card (partition X (S' \ ↑s))
+            -- TODO: I now know how to prove this whole
+            from ?_
+          ]
+          .
+            simp only [S']
+            simp only [S_eq]
+            rw [Finset.insert_sdiff_of_mem S' (Finset.mem_singleton.mpr rfl)]
+            simp [Finset.sdiff_eq_self_of_disjoint, x_nin_S']
+            -- TODO: abstract this
+            have part_card_by_supp_card
+              : ∀ t : { x // x ∈ S'.powerset ∧ x.card = ↑k },
+                Fintype.card (partition X (S' \ ↑t)) = bell (n - ↑k) :=
+            by
+              intro t
+              have card_eq : (S' \ ↑t).card = n - ↑k := by
+                rw [Finset.card_sdiff]
+                · rw [← S'_card]
+                  rw [t.prop.2]
+                · exact Finset.mem_powerset.mp t.prop.1
+              have lt : n - ↑k < n + 1 := by omega
+              exact ih (n - ↑k) lt (S' \ ↑t) card_eq
+            simp_rw [part_card_by_supp_card]
+            rw [Finset.sum_const, Finset.card_univ]
+            change
+              Fintype.card { x_1 // x_1 ∈ S'.powerset ∧ x_1.card = ↑k } • bell (n - ↑k)
+              = n.choose ↑k * bell (n - ↑k)
+            simp [S'_card]
+            left
+            have : (S'.powerset.filter (fun x => x.card = ↑k)).card = n.choose ↑k :=
+            by
+              rw [
+                ← Finset.powersetCard_eq_filter,
+                Finset.card_powersetCard
+              ]
+              congr 1
+            rw [
+              ← this,
+              Finset.card_filter,
+              Fintype.card_congr (powersetCard_as_predicate k),
+              Fintype.card_coe,
+              Finset.card_powersetCard
+            ]
+            conv_lhs => arg 1; rw [S'_card]
+            rw [
+              Finset.sum_ite,
+              Finset.sum_const, Finset.sum_const,
+              smul_eq_mul, mul_one, smul_eq_mul, mul_zero, add_zero,
+              ← Finset.powersetCard_eq_filter,
+              Finset.card_powersetCard
+            ]
+            conv_rhs => arg 1; rw [S'_card]
+          . sorry
+        conv_rhs => arg 2; ext i; rw [this]
         rw [bell_recurrence]
         have : S'.card + 1 = n + 1 := by omega
-        -- gotta prove that summing over Fin is the same as over
-        -- Finset.range
+        rw [← Fin.sum_univ_eq_sum_range]
+        conv_rhs =>
+          arg 2; ext i; arg 1;
+          rw [← Nat.choose_symm (S'_card ▸ Nat.le_of_lt_succ (Fin.is_lt i))]
+
+        --- TODO: only thing missing here is index manip
         sorry
-      . sorry
+      .
+        rw [S'_card]
+        have inst: Fintype (Fin (n + 1)) := sorry
+        exact inst
