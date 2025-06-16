@@ -7,9 +7,13 @@ import Mathlib.Data.Fintype.Basic
 import Mathlib.Data.Fintype.Card
 import Mathlib.Algebra.Algebra.Basic
 
+variable
+  {X: Type} [DecidableEq X]
+  {S: Finset X}
+
 -- from data.setoid.partitions
 -- youtu.be/FEKsZj3WkTY
-@[ext] structure partition (X : Type) [DecidableEq X] (S: Finset X) where
+@[ext] structure partition (S: Finset X) where
   family : Finset (Finset X)
   non_empty: ∀ c ∈ family, c ≠ ∅
   covers: family.biUnion id = S
@@ -18,9 +22,8 @@ import Mathlib.Algebra.Algebra.Basic
   disjoint: ∀ c ∈ family, ∀ d ∈ family, c ∩ d ≠ ∅ → c = d
 
 lemma partition.blocks_with_common_element_equal
-  {X: Type} [DecidableEq X]
-  {S b1 b2: Finset X}
-  (part: partition X S)
+  {b1 b2: Finset X}
+  (part: partition S)
   (b1_in: b1 ∈ part.family)
   (b2_in: b2 ∈ part.family)
   {x: X}
@@ -37,17 +40,15 @@ by
   exact part.disjoint b1 b1_in b2 b2_in blocks_intersect
 
 lemma partition.block_subset_of_support
-  {X: Type} [DecidableEq X]
-  {S: Finset X}
   { block: Finset X }
-  (part: partition X S)
+  (part: partition S)
   (block_in: block ∈ part.family) :
   block ⊆ S :=
 by
   rw [← part.covers]
   exact Finset.subset_biUnion_of_mem id block_in
 
-def partition.mk_if_valid {X: Type} [DecidableEq X] (S: Finset X) (family: Finset (Finset X)) : Option (partition X S) :=
+def partition.mk_if_valid (S: Finset X) (family: Finset (Finset X)) : Option (partition S) :=
   if non_empty : (∀ c ∈ family, c ≠ ∅)
   then if covers : (family.biUnion id = S)
        then if disjoint : (∀ c ∈ family, ∀ d ∈ family, c ∩ d ≠ ∅ → c = d)
@@ -63,11 +64,9 @@ def partition.mk_if_valid {X: Type} [DecidableEq X] (S: Finset X) (family: Finse
 
 -- TODO: how to name this?
 lemma partition.mk_if_valid_id_family
-  {X: Type}
-  [DecidableEq X]
-  {S: Finset X}
+
   (fam: Finset (Finset X))
-  (part: partition X S)
+  (part: partition S)
   (mk_is_some: partition.mk_if_valid S fam = some part):
   part.family = fam :=
 by
@@ -76,7 +75,7 @@ by
   rw [← mk_is_some]
 
 
-lemma partition.mk_if_valid_inj_some {X: Type} [DecidableEq X] {S: Finset X} :
+lemma partition.mk_if_valid_inj_some  :
   ∀ (a a' : Finset (Finset X)), ∀ b ∈ mk_if_valid S a, b ∈ mk_if_valid S a' → a = a' :=
 by
   intros fam1 fam2 p p_in_fam1 p_in_fam2
@@ -89,7 +88,7 @@ by
 
   rw [← fam_eq_fam1, fam_eq_fam2]
 
-lemma partition.family_in_double_powerset {X} [DecidableEq X] {S: Finset X} (part: partition X S) :
+lemma partition.family_in_double_powerset  (part: partition S) :
   part.family ∈ (S.powerset.powerset) :=
 by
   rw [Finset.mem_powerset]
@@ -106,7 +105,7 @@ by
   exact x_in_union
 
 lemma partition.in_double_powerset_filterMap_mk_if_valid
-  (X: Type) [DecidableEq X] {S: Finset X} (part : partition X S):
+  (part : partition S):
   part ∈ (S.powerset.powerset).filterMap
     (partition.mk_if_valid S)
     (partition.mk_if_valid_inj_some) :=
@@ -138,26 +137,26 @@ by
     . exact non_empty part.non_empty
 
 -- not the shortest neatier proof but it's constructive and educational
-instance partition.Fintype (X : Type) [DecidableEq X] {S: Finset X} : Fintype (partition X S) where
+instance partition.Fintype: Fintype (partition S) where
   elems := (S.powerset.powerset).filterMap
     (partition.mk_if_valid S)
     (partition.mk_if_valid_inj_some)
   complete :=
   by
     intro part
-    exact partition.in_double_powerset_filterMap_mk_if_valid X part
+    exact partition.in_double_powerset_filterMap_mk_if_valid part
 
-def finset_partition_count (X : Type) [DecidableEq X] (S : Finset X): ℕ :=
-  Fintype.card (partition X S)
+def finset_partition_count (S : Finset X): ℕ :=
+  Fintype.card (partition S)
 
-def the_empty_partition (X : Type) [DecidableEq X] : partition X ∅ := {
+def the_empty_partition : partition (∅: Finset X) := {
   family := ∅,
   non_empty := fun c hc => (Finset.not_mem_empty c hc).elim
   covers := Finset.biUnion_empty
   disjoint := fun c hc => (Finset.not_mem_empty c hc).elim
 }
 
-lemma singleton_empty_powerset {X} [DecidableEq X]: ({∅}: (Finset (Finset X))).powerset = {∅, {∅}} := by
+lemma singleton_empty_powerset: ({∅}: (Finset (Finset X))).powerset = {∅, {∅}} := by
   ext fam
   constructor
   · intro h
@@ -165,12 +164,12 @@ lemma singleton_empty_powerset {X} [DecidableEq X]: ({∅}: (Finset (Finset X)))
   · intro h
     exact h
 
-lemma partitions_of_empty {X: Type} [DecidableEq X] :
+lemma partitions_of_empty:
   Finset.filterMap
     (partition.mk_if_valid ∅)
     ({∅, {∅}}: (Finset (Finset (Finset X))))
     (partition.mk_if_valid_inj_some)
-  =  {the_empty_partition X} :=
+  =  {the_empty_partition} :=
 by
   ext part
   simp only [Finset.mem_filterMap, Finset.mem_singleton, iff_def]
@@ -204,13 +203,14 @@ by
       simp
       rfl
 
-lemma partition.parts_of_empty_but_better {X: Type} [DecidableEq X] (part: partition X ∅) :
-  part = the_empty_partition X :=
+lemma partition.parts_of_empty_but_better
+  (part: partition (∅: Finset X)) :
+  part = the_empty_partition :=
 by
   have h1 : part ∈ (∅ : Finset X).powerset.powerset.filterMap
     (partition.mk_if_valid ∅)
     (partition.mk_if_valid_inj_some) :=
-    partition.in_double_powerset_filterMap_mk_if_valid X part
+    partition.in_double_powerset_filterMap_mk_if_valid part
 
   have h2 : (∅ : Finset X).powerset = {∅} := Finset.powerset_empty
   have h3 : ({∅} : Finset (Finset X)).powerset = {∅, {∅}} := singleton_empty_powerset
@@ -218,8 +218,8 @@ by
   rw [partitions_of_empty] at h1
   exact Finset.mem_singleton.mp h1
 
-lemma card_partitions_of_empty {X: Type} [Inhabited X] [DecidableEq X] :
-  Fintype.card (partition X ∅) = 1 :=
+lemma card_partitions_of_empty:
+  Fintype.card (partition (∅: Finset X)) = 1 :=
 by
   unfold Fintype.card
   unfold Finset.univ
@@ -235,11 +235,9 @@ by
 -- Setoid.IsPartition or Finpartition
 -- todo: give a more mathy name to this (preimage filter whatever whatever)
 lemma partition.element_in_exactly_one_block
-  {X: Type} [DecidableEq X]
-  {S: Finset X}
   {x: X}
   (x_in_S: x ∈ S)
-  (part: partition X S):
+  (part: partition S):
     { b ∈ part.family | x ∈ b }.card = 1
   :=
 by
@@ -260,9 +258,8 @@ by
     exact ⟨block_in_family, x_in_block⟩
 
 def partition.choose_eq_class
-  {X: Type} [DecidableEq X]
-  {S: Finset X}
-  (part: partition X S)
+
+  (part: partition S)
   (x: X)
   (x_in_S: x ∈ S):
   { b // b ∈ part.family ∧ x ∈ b } :=
@@ -293,7 +290,6 @@ by
 
 -- TODO: find this on mathlib
 lemma disjoint_union_to_sdiff
-  {X: Type}  [DecidableEq X]
   { s t r : Finset X }
   (s_disjoint_t : Disjoint s t):
     s ∪ t = r → t = r \ s
@@ -315,24 +311,21 @@ by
     | inr h => exact h
 
 structure ForwardResult
-  {X: Type} [DecidableEq X]
-  {S: Finset X}
   {x: X}
   (x_not_in_S: x ∉ S)
-  (part_insert: partition X (insert x S))
+  (part_insert: partition (insert x S))
 where
   subset : { x // x ∈ S.powerset }
-  part_rest : partition X (S \ ↑subset)
+  part_rest : partition (S \ ↑subset)
   family_eq : part_insert.family = insert (insert x ↑subset) part_rest.family
 
 -- readme: it's only called forward because of the direction
 -- we defined the bijection but it definitely feels more backwards
 def partition.insert_recurrence_forward
-  {X: Type} [DecidableEq X]
-  {S: Finset X}
+
   {x: X}
   (x_not_in_S: x ∉ S):
-    (part_insert: partition X (insert x S)) ->
+    (part_insert: partition (insert x S)) ->
     ForwardResult x_not_in_S part_insert
   :=
 by
@@ -382,7 +375,7 @@ by
     apply c_neq_block
     rw [c_eq_block]
 
-  let rest_partition : partition X (S \ s) := {
+  let rest_partition : partition (S \ s) := {
     family := rest_family
 
     non_empty := by
@@ -420,23 +413,19 @@ by
   }
 
 structure BackwardResult
-  {X: Type} [DecidableEq X]
-  {S: Finset X}
   (x: X)
   (s: { x // x ∈ S.powerset })
-  (part_rest: partition X (S \ s))
+  (part_rest: partition (S \ s))
 where
-  part_insert : partition X (insert x S)
+  part_insert : partition (insert x S)
   family_eq : part_insert.family = insert (insert x ↑s) part_rest.family
 
 -- readme: see above, maybe this one should be called forward instead
 def partition.insert_recurrence_backward
-  {X: Type} [DecidableEq X]
-  {S: Finset X}
   {x: X}
   (x_not_in_S: x ∉ S):
     (s: { x // x ∈ S.powerset }) ->
-    (part_rest: partition X (S \ s)) ->
+    (part_rest: partition (S \ s)) ->
     BackwardResult x s part_rest
   :=
 by
@@ -475,7 +464,7 @@ by
     have b_subset : b ⊆ S \ s := Finset.mem_powerset.mp (part_rest_family b_in_rest)
     exact Finset.disjoint_of_subset_right b_subset disjoint_block_rest
 
-  let part_insert: partition X (insert x S) := {
+  let part_insert: partition (insert x S) := {
     family := insert_family,
 
     non_empty :=
@@ -520,12 +509,10 @@ by
   }
 
 lemma partition.forward_backward_subset_eq
-  {X : Type} [DecidableEq X]
-  {S : Finset X}
   {x : X}
   (x_not_in_S : x ∉ S)
   (s : { x // x ∈ S.powerset })
-  (part_rest : partition X (S \ ↑s)) :
+  (part_rest : partition (S \ ↑s)) :
     let backward := insert_recurrence_backward x_not_in_S s part_rest
     let forward := insert_recurrence_forward x_not_in_S backward.part_insert
     forward.subset = s
@@ -595,9 +582,9 @@ by
 -- maybe I have to define equality of partitions to only depend on families?
 -- maybe instead of covers I could have a computed property `support` defined
 -- as the biUnion id of the family
-lemma partition.heq_of_family_eq {X : Type} [DecidableEq X]
+lemma partition.heq_of_family_eq
   {S1 S2 : Finset X}
-  (p1 : partition X S1) (p2 : partition X S2)
+  (p1 : partition S1) (p2 : partition S2)
   (equal_families : p1.family = p2.family) :
   HEq p1 p2 :=
 by
@@ -608,11 +595,9 @@ by
   simp only [equal_families]
 
 def partition.insert_recurrence
-  {X: Type} [DecidableEq X]
-  {S: Finset X}
   (x: X)
   (x_not_in_S: x ∉ S):
-  partition X (insert x S) ≃ Σ (s : S.powerset), partition X (S \ s) :=
+  partition (insert x S) ≃ Σ (s : S.powerset), partition (S \ s) :=
 {
   toFun := fun part_insert =>
     let forward_result :=
@@ -704,10 +689,10 @@ def partition.insert_recurrence
 -- from existing theorems in mathlib, but I'm not sure
 -- but it's chill it's simple enough
 -- TODO: use powersetCard instead
-def sigma_powerset_by_card {X : Type} [DecidableEq X] {S: Finset X}:
-  (Σ s : { x // x ∈ S.powerset }, partition X (S \ ↑s))
+def sigma_powerset_by_card :
+  (Σ s : { x // x ∈ S.powerset }, partition (S \ ↑s))
   ≃
-  (Σ m : Fin (S.card + 1), Σ s : { x // x ∈ S.powerset ∧ x.card = m }, partition X (S \ ↑s))
+  (Σ m : Fin (S.card + 1), Σ s : { x // x ∈ S.powerset ∧ x.card = m }, partition (S \ ↑s))
 := {
   toFun :=
   by
@@ -739,7 +724,7 @@ def sigma_powerset_by_card {X : Type} [DecidableEq X] {S: Finset X}:
 
 -- TODO: I think I now know how to not need this anymore
 def powersetCard_as_predicate
-  {X : Type} [DecidableEq X] {S: Finset X} (m: Fin (S.card + 1)):
+  (m: Fin (S.card + 1)):
   { x // x ∈ S.powerset ∧ x.card = m } ≃ { x // x ∈ S.powersetCard m }
 := {
   toFun := by
