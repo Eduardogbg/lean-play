@@ -35,14 +35,6 @@ import Mathlib.Data.Fintype.Sum
 import Mathlib.Data.Fintype.Units
 import Mathlib.Data.Fintype.Vector
 
-variable {α : Type*} [DecidableEq α] [Fintype α]
-variable (S' : Finset α) (k : ℕ)
-
-open scoped BigOperators
-
--- now Lean happily finds the instance
-#check (inferInstance :
-  Fintype {x : Finset α // x ∈ S'.powerset ∧ x.card = k})
 
 /-
   B_{n + 1} = ∑_{k = 0}^{n} (n choose k) B_k
@@ -134,23 +126,19 @@ by
   rw [bell_eq_bell_term_succ_prev]
   simp only [le_refl, bell_term_recurrence]
 
--- why couldn't lean synthetize this on its own?
--- how do I finish the proof?
--- instance this_should_have_been_synth
---   (X: Type) [DecidableEq X]
---   (S: Finset X):
---   Fintype (Σ (s : S.powerset), partition X (S \ ↑s)) :=
--- by
---   sorry
-instance this_should_have_been_synth_2
+-- TODO: switch occurences of this predicate for powersetCard directly
+-- so we can throw this out
+instance fintype_powersetCard_as_predicate
   (X: Type) [DecidableEq X]
-  (S: Finset X):
-  Fintype (Σ m : Fin (S.card + 1), Σ s : { x // x ∈ S.powerset ∧ x.card = m }, partition X (S \ ↑s)) := sorry
+  (S: Finset X)
+  (k: Fin (S.card + 1)):
+  Fintype { x // x ∈ S.powerset ∧ x.card = ↑k } :=
+by
+  apply Fintype.ofFinset (S.powersetCard ↑k)
+  intro x
+  simp [Finset.mem_powersetCard, Finset.mem_powerset]
+  rfl
 
-instance synth_wtf
-  (X: Type) [DecidableEq X]
-  (S: Finset X):
-  (i : Fin (S.card + 1)) → Fintype ((fun m ↦ (s : { x // x ∈ S.powerset ∧ x.card = ↑m }) × partition X (S \ ↑s)) i) := sorry
 
 theorem bell_numbers_count_partitions
   (X : Type) [DecidableEq X] :
@@ -195,94 +183,121 @@ by
       rw [Fintype.card_congr sigma_powerset_by_card]
 
       convert Fintype.card_sigma
-      .
-        have :
-          (k: Fin (S'.card + 1))
-            → Fintype.card
-            ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition X (S' \ ↑s))
-          = (Nat.choose n k * bell (n - k)) :=
-        by
-          intro k
-          -- honestly I have no clue why this isn't happening automatically
-          -- TODO: either figure why it's not synthing or abstract it
-          have inst : Fintype { x_1 // x_1 ∈ S'.powerset ∧ x_1.card = ↑k } :=
-          by
-            apply Fintype.ofFinset (S'.powersetCard ↑k)
-            intro x
-            simp [Finset.mem_powersetCard, Finset.mem_powerset]
-            rfl
-          -- TODO: this is temporary until I figure out how to do it
-          -- without holes
-          rw [
-            show Fintype.card (
-              (s : { x // x ∈ S'.powerset ∧ x.card = ↑k })
-              × partition X (S' \ ↑s)
-            ) =  ∑
-              (s : { x // x ∈ S'.powerset ∧ x.card = ↑k }),
-              Fintype.card (partition X (S' \ ↑s))
-            -- TODO: I now know how to prove this whole
-            from ?_
-          ]
-          .
-            simp only [S']
-            simp only [S_eq]
-            rw [Finset.insert_sdiff_of_mem S' (Finset.mem_singleton.mpr rfl)]
-            simp [Finset.sdiff_eq_self_of_disjoint, x_nin_S']
-            -- TODO: abstract this
-            have part_card_by_supp_card
-              : ∀ t : { x // x ∈ S'.powerset ∧ x.card = ↑k },
-                Fintype.card (partition X (S' \ ↑t)) = bell (n - ↑k) :=
-            by
-              intro t
-              have card_eq : (S' \ ↑t).card = n - ↑k := by
-                rw [Finset.card_sdiff]
-                · rw [← S'_card]
-                  rw [t.prop.2]
-                · exact Finset.mem_powerset.mp t.prop.1
-              have lt : n - ↑k < n + 1 := by omega
-              exact ih (n - ↑k) lt (S' \ ↑t) card_eq
-            simp_rw [part_card_by_supp_card]
-            rw [Finset.sum_const, Finset.card_univ]
-            change
-              Fintype.card { x_1 // x_1 ∈ S'.powerset ∧ x_1.card = ↑k } • bell (n - ↑k)
-              = n.choose ↑k * bell (n - ↑k)
-            simp [S'_card]
-            left
-            have : (S'.powerset.filter (fun x => x.card = ↑k)).card = n.choose ↑k :=
-            by
-              rw [
-                ← Finset.powersetCard_eq_filter,
-                Finset.card_powersetCard
-              ]
-              congr 1
-            rw [
-              ← this,
-              Finset.card_filter,
-              Fintype.card_congr (powersetCard_as_predicate k),
-              Fintype.card_coe,
-              Finset.card_powersetCard
-            ]
-            conv_lhs => arg 1; rw [S'_card]
-            rw [
-              Finset.sum_ite,
-              Finset.sum_const, Finset.sum_const,
-              smul_eq_mul, mul_one, smul_eq_mul, mul_zero, add_zero,
-              ← Finset.powersetCard_eq_filter,
-              Finset.card_powersetCard
-            ]
-            conv_rhs => arg 1; rw [S'_card]
-          . sorry
-        conv_rhs => arg 2; ext i; rw [this]
-        rw [bell_recurrence]
-        have : S'.card + 1 = n + 1 := by omega
-        rw [← Fin.sum_univ_eq_sum_range]
-        conv_rhs =>
-          arg 2; ext i; arg 1;
-          rw [← Nat.choose_symm (S'_card ▸ Nat.le_of_lt_succ (Fin.is_lt i))]
 
-        --- TODO: only thing missing here is index manip
-        sorry
+      have :
+        (k: Fin (S'.card + 1))
+          → Fintype.card
+          ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition X (S' \ ↑s))
+        = (Nat.choose n k * bell (n - k)) :=
+      by
+        intro k
+        rw [
+          show Fintype.card (
+            (s : { x // x ∈ S'.powerset ∧ x.card = ↑k })
+            × partition X (S' \ ↑s)
+          ) =  ∑
+            (s : { x // x ∈ S'.powerset ∧ x.card = ↑k }),
+            Fintype.card (partition X (S' \ ↑s))
+          from (by rw [Fintype.card_sigma])
+        ]
+        simp only [S']
+        simp only [S_eq]
+        rw [Finset.insert_sdiff_of_mem S' (Finset.mem_singleton.mpr rfl)]
+        simp [Finset.sdiff_eq_self_of_disjoint, x_nin_S']
+
+        -- TODO: abstract this
+        have part_card_by_supp_card
+          : ∀ t : { x // x ∈ S'.powerset ∧ x.card = ↑k },
+            Fintype.card (partition X (S' \ ↑t)) = bell (n - ↑k) :=
+        by
+          intro t
+          have card_eq : (S' \ ↑t).card = n - ↑k := by
+            rw [Finset.card_sdiff]
+            · rw [← S'_card]
+              rw [t.prop.2]
+            · exact Finset.mem_powerset.mp t.prop.1
+          have lt : n - ↑k < n + 1 := by omega
+          exact ih (n - ↑k) lt (S' \ ↑t) card_eq
+
+        simp_rw [part_card_by_supp_card]
+        rw [Finset.sum_const, Finset.card_univ]
+        change
+          Fintype.card { x_1 // x_1 ∈ S'.powerset ∧ x_1.card = ↑k } • bell (n - ↑k)
+          = n.choose ↑k * bell (n - ↑k)
+        simp [S'_card]
+        left
+        have : (S'.powerset.filter (fun x => x.card = ↑k)).card = n.choose ↑k :=
+        by
+          rw [
+            ← Finset.powersetCard_eq_filter,
+            Finset.card_powersetCard
+          ]
+          congr 1
+        rw [
+          ← this,
+          Finset.card_filter,
+          Fintype.card_congr (powersetCard_as_predicate k),
+          Fintype.card_coe,
+          Finset.card_powersetCard
+        ]
+        conv_lhs => arg 1; rw [S'_card]
+        rw [
+          Finset.sum_ite,
+          Finset.sum_const, Finset.sum_const,
+          smul_eq_mul, mul_one, smul_eq_mul, mul_zero, add_zero,
+          ← Finset.powersetCard_eq_filter,
+          Finset.card_powersetCard
+        ]
+        conv_rhs => arg 1; rw [S'_card]
+
+      conv_rhs => arg 2; ext i; rw [this]
+      rw [bell_recurrence]
+      have : S'.card + 1 = n + 1 := by omega
+      rw [← Fin.sum_univ_eq_sum_range]
+      conv_rhs =>
+        arg 2; ext i; arg 1;
+        rw [← Nat.choose_symm (S'_card ▸ Nat.le_of_lt_succ (Fin.is_lt i))]
+
+      rw [this]
+      have : ∀i: Fin (n + 1), (n - ↑i) = Fin.rev i :=
+      by
+        intro i
+        rw [Fin.rev]
+        simp
+      conv_rhs => arg 2; intro i; rw [this i]
+      let f : Fin (n + 1) → ℕ := fun j => n.choose ↑j * bell ↑j
+      have : ∀k: Fin (n + 1), (n - (n - ↑k)) = ↑k := by omega
+      rw [Fintype.sum_bijective Fin.rev]
       .
-        rw [S'_card]
-        have inst: Fintype (Fin (n + 1)) := sorry
-        exact inst
+        constructor
+        .
+          unfold Function.Injective
+          simp
+        .
+          unfold Function.Surjective
+          intro b
+          conv => arg 1; ext a; rw [Fin.rev]
+          conv => arg 1; ext a; rw [Fin.eq_mk_iff_val_eq]
+          simp
+          use n - ↑b
+          have : ↑(↑n - b) = n - ↑b :=
+          by
+            simp
+            rw [Fin.last]
+            rw [Fin.sub_def]
+            simp
+            have h1 : (n + 1) - ↑b + n = (n - ↑b) + (n + 1) := by omega
+            rw [h1]
+            rw [Nat.add_mod_right (n - ↑b) (n + 1)]
+            have hb : ↑b ≤ n := Nat.lt_succ_iff.mp (Fin.is_lt b)
+            have : n - ↑b < n + 1 := by omega
+            exact Nat.mod_eq_of_lt this
+          rw [this]
+          omega
+      .
+        intro i
+        rw [Fin.rev]
+        simp
+        rw [Nat.choose_symm]
+        rw [this i]
+        exact Nat.le_of_lt_succ i.isLt
