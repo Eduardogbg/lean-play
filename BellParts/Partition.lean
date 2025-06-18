@@ -64,7 +64,6 @@ def partition.mk_if_valid (S: Finset X) (family: Finset (Finset X)) : Option (pa
 
 -- TODO: how to name this?
 lemma partition.mk_if_valid_id_family
-
   (fam: Finset (Finset X))
   (part: partition S)
   (mk_is_some: partition.mk_if_valid S fam = some part):
@@ -76,7 +75,9 @@ by
 
 
 lemma partition.mk_if_valid_inj_some  :
-  ∀ (a a' : Finset (Finset X)), ∀ b ∈ mk_if_valid S a, b ∈ mk_if_valid S a' → a = a' :=
+  ∀ (a a' : Finset (Finset X)),
+  ∀ b ∈ mk_if_valid S a,
+  b ∈ mk_if_valid S a' → a = a' :=
 by
   intros fam1 fam2 p p_in_fam1 p_in_fam2
   rw [Option.mem_def] at p_in_fam1 p_in_fam2
@@ -88,8 +89,8 @@ by
 
   rw [← fam_eq_fam1, fam_eq_fam2]
 
-lemma partition.family_in_double_powerset  (part: partition S) :
-  part.family ∈ (S.powerset.powerset) :=
+lemma partition.family_in_double_powerset
+ (part: partition S) : part.family ∈ (S.powerset.powerset) :=
 by
   rw [Finset.mem_powerset]
   intro c c_in_fam

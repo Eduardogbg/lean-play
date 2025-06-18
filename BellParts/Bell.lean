@@ -9,6 +9,8 @@ import Mathlib.Data.Fintype.BigOperators
 -- TODO: is there a way to get all imports I depend on directly
 -- so it's more explicit which ones I need?
 
+variable {X: Type} [DecidableEq X] (S: Finset X)
+
 def bell_term: ℕ → ℕ → ℕ
   | 0, _ => 1
   | _, 0 => 1
@@ -53,8 +55,6 @@ by
 -- TODO: switch occurences of this predicate for powersetCard directly
 -- so we can throw this out
 instance fintype_powersetCard_as_predicate
-  (X: Type) [DecidableEq X]
-  (S: Finset X)
   (k: Fin (S.card + 1)):
   Fintype { x // x ∈ S.powerset ∧ x.card = ↑k } :=
 by
@@ -63,9 +63,10 @@ by
   simp [Finset.mem_powersetCard, Finset.mem_powerset]
   rfl
 
-theorem bell_numbers_count_partitions
-  (X : Type) [DecidableEq X] :
-  ∀ n : ℕ, ∀ S : Finset X, S.card = n → finset_partition_count X S = bell n :=
+theorem bell_numbers_count_partitions:
+  ∀ n : ℕ,
+  ∀ S: Finset X,
+    S.card = n → finset_partition_count S = bell n :=
 by
   intro n
   induction n using Nat.strong_induction_on with
@@ -78,7 +79,7 @@ by
       rw [S_empty]
       rw [finset_partition_count, bell, bell_term]
       rw [Fintype.card_eq_one_iff]
-      use the_empty_partition X
+      use the_empty_partition
       exact partition.parts_of_empty_but_better
     | succ n =>
       obtain ⟨x, hx⟩ := Finset.card_pos.mp (by rw [S_card]; exact Nat.zero_lt_succ n)
@@ -114,7 +115,7 @@ by
       have part_card_by_supp_card :
         ∀ k : Fin (S'.card + 1),
         ∀ t : { x // x ∈ S'.powerset ∧ x.card = ↑k },
-        Fintype.card (partition X (S' \ ↑t)) = bell (n - ↑k) :=
+        Fintype.card (partition (S' \ ↑t)) = bell (n - ↑k) :=
       by
         intro k t
         have card_eq : (S' \ ↑t).card = n - ↑k := by
@@ -140,7 +141,7 @@ by
       have :
         (k: Fin (S'.card + 1))
           → Fintype.card
-          ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition X (S' \ ↑s))
+          ((s : { x // x ∈ S'.powerset ∧ x.card = ↑k }) × partition (S' \ ↑s))
         = (Nat.choose n k * bell (n - k)) :=
       by
         intro k
